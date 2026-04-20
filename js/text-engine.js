@@ -236,10 +236,12 @@ const TextEngine = (() => {
     // Atualiza o perfil de aprendizado do usuário
     function updateProfile(state, email, doc, weight = 1) {
         if (!email || !state.users[email]) return;
-        if (!state.user_interest[email]) state.user_interest[email] = { topics: {}, keywords: {}, total_interactions: 0 };
+        if (!state.user_interest[email] || !state.user_interest[email].topics) {
+            state.user_interest[email] = { topics: {}, keywords: {}, total_interactions: 0 };
+        }
         
         const profile = state.user_interest[email];
-        profile.total_interactions += weight;
+        profile.total_interactions = (profile.total_interactions || 0) + weight;
         
         if (doc.topic) {
             profile.topics[doc.topic] = (profile.topics[doc.topic] || 0) + (2 * weight);
@@ -254,7 +256,7 @@ const TextEngine = (() => {
 
     // Calcula a afinidade (Score ML) de um documento com o perfil do usuário
     function calculateAffinity(profile, doc) {
-        if (!profile || profile.total_interactions === 0) return 0;
+        if (!profile || !profile.topics || !profile.keywords || !profile.total_interactions) return 0;
         let score = 0;
         
         if (doc.topic && profile.topics[doc.topic]) {
