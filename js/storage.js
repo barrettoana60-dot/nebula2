@@ -209,5 +209,6 @@ const NebulaStorage = (() => {
         saveStateAsync,
         ensureWorkspace,
         syncWorkspaceState,
+        syncWorkspaceStateAsync
     };
 })();
