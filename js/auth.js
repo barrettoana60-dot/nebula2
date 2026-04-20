@@ -68,17 +68,17 @@ const PageAuth = (() => {
         `;
 
         // Login handler
-        document.getElementById('li-btn').addEventListener('click', () => {
+        document.getElementById('li-btn').addEventListener('click', async () => {
             const email = document.getElementById('li-email').value.trim();
             const pass = document.getElementById('li-pass').value;
             const user = state.users[email];
             if (user && user.password === NebulaStorage.hashPasswordSync(pass)) {
                 // Configura a chave de criptografia baseada na senha
-                NebulaStorage.setEncryptionKey(pass);
+                await NebulaStorage.setEncryptionKey(pass);
                 state.logged_in = true;
                 state.current_user = email;
                 if (!state.user_interest[email]) state.user_interest[email] = {};
-                NebulaStorage.syncWorkspaceState(state, email);
+                await NebulaStorage.syncWorkspaceStateAsync(state, email);
                 state.page = 'Dashboard';
                 NebulaApp.renderApp();
             } else {

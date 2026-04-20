@@ -15,6 +15,9 @@ const TextEngine = (() => {
     ]);
 
     const TOPIC_RULES = {
+        "Artes Visuais & História da Arte": ["arte", "artes", "pintura", "fauvismo", "matisse", "vanguarda", "estética", "escultura", "quadro", "galeria", "expressionismo", "cubismo", "impressionismo", "tela", "artista", "obras"],
+        "Filosofia & Sociologia": ["filosofia", "sociologia", "sociedade", "pensamento", "existencialismo", "kant", "nietzsche", "marx", "foucault", "ética", "moral"],
+        "Literatura & Linguística": ["literatura", "linguística", "poesia", "romance", "sintaxe", "semântica", "autor", "narrativa", "discurso", "texto", "leitura", "gramática"],
         "Inteligência Artificial": ["ia","ai","machine learning","deep learning","rede neural","llm","modelo","algoritmo","transformer","gpt","bert","nlp","visão computacional"],
         "Museologia": ["museu","museologia","acervo","coleção","documentação","patrimônio","preservação","museal","curadoria","exposição"],
         "Computação": ["python","software","sistema","banco de dados","api","código","computação","programação","arquitetura","cloud"],
