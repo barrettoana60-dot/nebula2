@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Nebula Research — Pesquisa acadêmica multimodal com análise inteligente, visual escuro animado e repositórios privados">
+    <title>Nebula Research</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔎</text></svg>">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/nebula.css">
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+</head>
+<body>
+    <div id="app" class="app-root">
+        <!-- Floating orbs -->
+        <div class="orb orb-a"></div>
+        <div class="orb orb-b"></div>
+        <div class="orb orb-c"></div>
+
+        <!-- Navbar (hidden when not logged in) -->
+        <nav id="navbar" class="nav-shell" style="display:none">
+            <div class="nav-brand">Nebula Research</div>
+            <div class="nav-links" id="navLinks"></div>
+            <div class="nav-right">
+                <div class="nav-user-chip" id="navUserChip"></div>
+                <button class="nav-logout-btn" id="navLogout" onclick="NebulaApp.logout()">Sair</button>
+            </div>
+        </nav>
+
+        <!-- Page Container -->
+        <main id="pageContainer" class="page-container"></main>
+    </div>
+
+    <!-- Scripts -->
+    <script src="js/storage.js"></script>
+    <script src="js/text-engine.js"></script>
+    <script src="js/document-engine.js"></script>
+    <script src="js/search-engine.js"></script>
+    <script src="js/network-engine.js"></script>
+    <script src="js/pages/dashboard.js"></script>
+    <script src="js/pages/search.js"></script>
+    <script src="js/pages/repository.js"></script>
+    <script src="js/pages/analysis.js"></script>
+    <script src="js/pages/connections.js"></script>
+    <script src="js/pages/chat.js"></script>
+    <script src="js/pages/profile.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
