@@ -226,6 +226,57 @@ const TextEngine = (() => {
         return Object.entries(c).sort((a, b) => b[1] - a[1]);
     }
 
+    /* ============================================================
+       MACHINE LEARNING: Content-Based User Profiling
+       ============================================================ */
+    
+    // Atualiza o perfil de aprendizado do usuário
+    function updateProfile(state, email, doc, weight = 1) {
+        if (!email || !state.users[email]) return;
+        if (!state.user_interest[email]) state.user_interest[email] = { topics: {}, keywords: {}, total_interactions: 0 };
+        
+        const profile = state.user_interest[email];
+        profile.total_interactions += weight;
+        
+        if (doc.topic) {
+            profile.topics[doc.topic] = (profile.topics[doc.topic] || 0) + (2 * weight);
+        }
+        
+        if (doc.keywords && Array.isArray(doc.keywords)) {
+            doc.keywords.forEach(kw => {
+                profile.keywords[kw] = (profile.keywords[kw] || 0) + (1 * weight);
+            });
+        }
+    }
+
+    // Calcula a afinidade (Score ML) de um documento com o perfil do usuário
+    function calculateAffinity(profile, doc) {
+        if (!profile || profile.total_interactions === 0) return 0;
+        let score = 0;
+        
+        if (doc.topic && profile.topics[doc.topic]) {
+            score += profile.topics[doc.topic] * 5;
+        }
+        
+        if (doc.keywords && Array.isArray(doc.keywords)) {
+            doc.keywords.forEach(kw => {
+                if (profile.keywords[kw]) score += profile.keywords[kw] * 2;
+            });
+        }
+        
+        return score / Math.max(1, profile.total_interactions);
+    }
+
+    function getRecommendations(state, email, docs, limit = 5) {
+        const profile = state.user_interest[email];
+        if (!profile) return docs.slice(0, limit).map(d => ({ doc: d, score: 0 }));
+        
+        const scored = docs.map(d => ({ doc: d, score: calculateAffinity(profile, d) }));
+        scored.sort((a, b) => b.score - a.score);
+        
+        return scored.slice(0, limit);
+    }
+
     return {
         STOPWORDS, TOPIC_RULES, NATIONALITY_COORDS,
         normalize, tokenize, extractKeywordsTFIDF, summarizeExtractive,
@@ -233,5 +284,6 @@ const TextEngine = (() => {
         cosineSimilarity, scoreRelevance,
         extractAuthor, detectLanguage, computeReadability,
         recognizeIntent, safeTopValue, counter,
+        updateProfile, calculateAffinity, getRecommendations
     };
 })();

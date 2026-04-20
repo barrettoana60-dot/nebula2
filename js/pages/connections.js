@@ -1,108 +1,115 @@
 /* PAGE: CONNECTIONS */
 const PageConnections = (() => {
     function render(container, state) {
-        const user = state.users[state.current_user] || {};
-        const docs = state.repository || [];
-        const research = user.research || '';
-        const connections = getConnectedUsers(state, state.current_user, 10);
-
-        let html = `
-            <div class="page-title">Conexões entre Pesquisas</div>
-            <div class="page-sub">Rede 3D que une sua pesquisa, seus documentos, pesquisadores compatíveis e temas compartilhados</div>
-            <div class="glass">
-                <div class="grid-3 mb-1">
-                    <div class="input-group"><label class="input-label">Limite mín. similaridade</label>
-                        <input type="range" id="conn-min-sim" min="1" max="30" value="6" style="width:100%"><span id="conn-sim-val" class="small-muted">0.06</span></div>
-                    <div class="input-group"><label class="input-label"><input type="checkbox" id="conn-include-ext" checked> Incluir artigos externos</label></div>
-                    <div class="input-group"><label class="input-label">Nº artigos externos</label>
-                        <input type="range" id="conn-n-ext" min="3" max="15" value="8" style="width:100%"><span id="conn-n-val" class="small-muted">8</span></div>
+        // Prepara a tela inteira para o visualizador 3D Liquid Glass
+        container.innerHTML = `
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom: 1rem;">
+                <div>
+                    <div class="page-title">Ecossistema de Pesquisa</div>
+                    <div class="page-sub">Conexões entre você, seus documentos e a comunidade acadêmica.</div>
                 </div>
-                <button class="btn btn-primary btn-full" id="conn-build-btn">Construir rede</button>
+                <div class="tabs-bar" style="margin-bottom:0;">
+                    <button class="tab-btn active" id="net-tab-global" onclick="PageConnections.switchTab('global', this)">Visão Global</button>
+                    <button class="tab-btn" id="net-tab-social" onclick="PageConnections.switchTab('social', this)">Visão Social (Comunidade)</button>
+                </div>
             </div>
-            <div class="metric-grid mb-1">
-                <div class="metric-card blue"><div class="metric-label">Seus documentos</div><div class="metric-value">${docs.length}</div></div>
-                <div class="metric-card green"><div class="metric-label">Pesquisadores compatíveis</div><div class="metric-value">${connections.length}</div></div>
-                <div class="metric-card cyan"><div class="metric-label">Temas em comum</div><div class="metric-value">${new Set(connections.flatMap(c=>c.shared_topics||[])).size}</div></div>
-                <div class="metric-card purple"><div class="metric-label">Docs em comum</div><div class="metric-value">${connections.reduce((s,c)=>(c.shared_docs||[]).length+s,0)}</div></div>
+
+            <div class="glass-outer" style="padding:0; overflow:hidden; border-radius:32px; height:650px; position:relative;">
+                <div id="network-container" style="width:100%; height:100%;"></div>
+                
+                <!-- Overlay Informativo -->
+                <div style="position:absolute; top:20px; left:20px; pointer-events:none; background:rgba(0,0,0,0.4); backdrop-filter:blur(10px); padding:1rem; border-radius:16px; border:1px solid rgba(255,255,255,0.05);">
+                    <div style="font-size:0.8rem; color:var(--text-white-60); text-transform:uppercase; margin-bottom:0.5rem; letter-spacing:0.05em;">Legenda do Ecossistema</div>
+                    <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.3rem;"><div style="width:12px;height:12px;border-radius:50%;background:#ffffff;"></div> <span style="font-size:0.85rem">Você / Usuários</span></div>
+                    <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.3rem;"><div style="width:12px;height:12px;border-radius:50%;background:#ffbb99;"></div> <span style="font-size:0.85rem">Clusters de Pesquisa</span></div>
+                    <div style="display:flex; align-items:center; gap:0.5rem;"><div style="width:12px;height:12px;border-radius:50%;background:#d9774a;"></div> <span style="font-size:0.85rem">Artigos / Temas</span></div>
+                </div>
+
+                <!-- Modal de Ação Rápida (Escondido) -->
+                <div id="net-action-modal" style="display:none; position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); background:var(--bg-panel); border:1px solid rgba(255,255,255,0.1); padding:2rem; border-radius:24px; box-shadow:0 20px 50px rgba(0,0,0,0.5); z-index:100; text-align:center;">
+                    <div id="net-action-title" style="font-size:1.2rem; font-weight:500; margin-bottom:0.5rem;"></div>
+                    <div id="net-action-desc" style="color:var(--text-white-60); font-size:0.9rem; margin-bottom:1.5rem;"></div>
+                    <button class="btn btn-primary btn-full" id="net-action-btn">MANDAR MENSAGEM</button>
+                    <button class="btn btn-full" style="margin-top:0.5rem;" onclick="document.getElementById('net-action-modal').style.display='none'">FECHAR</button>
+                </div>
             </div>
-            <div class="glass-sm mb-1" style="display:flex;gap:1.2rem;flex-wrap:wrap;align-items:center">
-                <span class="small-muted">Legenda:</span>
-                <span style="font-size:0.82rem"><span style="color:#facc15">●</span> Sua pesquisa</span>
-                <span style="font-size:0.82rem"><span style="color:#60a5fa">●</span> Seus documentos</span>
-                <span style="font-size:0.82rem"><span style="color:#4ade80">●</span> Artigos externos</span>
-                <span style="font-size:0.82rem"><span style="color:#22d3ee">●</span> Pesquisadores</span>
-                <span style="font-size:0.82rem"><span style="color:#a78bfa">●</span> Temas compartilhados</span>
-                <span style="font-size:0.82rem"><span style="color:#f472b6">●</span> Docs em comum</span>
-            </div>
-            <div class="glass" id="conn-network-wrap"><div id="conn-network-3d"></div></div>
-            <div class="glass" id="conn-chain-wrap" style="display:none"><div class="section-title">Cadeia 3D de pesquisadores</div><div id="conn-chain-3d"></div></div>
-            <div class="glass" id="conn-edges-wrap" style="display:none"><div class="section-title">Conexões mais fortes</div><div id="conn-edges-table"></div></div>
-            <div class="glass" id="conn-users-wrap" style="display:none"><div class="section-title">Usuários conectados</div><div id="conn-users-list"></div></div>
         `;
-        container.innerHTML = html;
 
-        const simSlider = document.getElementById('conn-min-sim');
-        const simVal = document.getElementById('conn-sim-val');
-        simSlider.oninput = () => { simVal.textContent = (simSlider.value / 100).toFixed(2); };
-        const nSlider = document.getElementById('conn-n-ext');
-        const nVal = document.getElementById('conn-n-val');
-        nSlider.oninput = () => { nVal.textContent = nSlider.value; };
-
-        document.getElementById('conn-build-btn').addEventListener('click', () => buildNetwork(state, user, docs, research, connections));
-
-        // Auto-build if enough data
-        if (docs.length >= 1 || connections.length) buildNetwork(state, user, docs, research, connections);
+        // Renderização inicial
+        setTimeout(() => loadView('global', state), 50);
     }
 
-    async function buildNetwork(state, user, docs, research, connections) {
-        const minSim = (document.getElementById('conn-min-sim')?.value || 6) / 100;
-        const includeExt = document.getElementById('conn-include-ext')?.checked;
-        const nExt = parseInt(document.getElementById('conn-n-ext')?.value || 8);
+    let currentNodes = []; // Armazena os nós renderizados para recuperar os dados no clique
 
-        let extArticles = [];
-        if (includeExt && research) {
-            const terms = TextEngine.extractKeywordsTFIDF(research, 6);
-            const q = terms.slice(0, 5).join(' ') || research;
-            try { extArticles = await SearchEngine.searchSemanticScholar(q, nExt); } catch {}
-            if (extArticles.length < 4) { try { extArticles = extArticles.concat(await SearchEngine.searchCrossref(q, 4)); } catch {} }
-        }
+    function loadView(view, state) {
+        const c = document.getElementById('network-container');
+        c.innerHTML = '<div style="padding:2rem; text-align:center; color:var(--text-white-60)">Mapeando ecossistema em 3D...</div>';
+        
+        setTimeout(() => {
+            let data;
+            const ws = state.workspaces[state.current_user] || {};
+            const user = state.users[state.current_user] || {};
+            
+            if (view === 'global') {
+                const ext = state.search_history.slice(0, 15); // Top buscas recentes
+                data = NetworkEngine.buildResearchNetwork(ws.repository || [], ext, user.research);
+            } else {
+                data = NetworkEngine.buildConnectionChainNetwork(state, state.current_user, 10);
+            }
+            
+            if (!data || !data.nodes.length) {
+                c.innerHTML = '<div style="padding:4rem; text-align:center; color:var(--text-white-60)">Sem dados suficientes para mapear a rede. Explore ou envie mais documentos.</div>';
+                return;
+            }
 
-        const { nodes, edges } = NetworkEngine.buildResearchNetwork(docs, extArticles, research);
-        const filtered = edges.filter(e => e.weight >= minSim);
+            currentNodes = data.nodes;
+            NetworkEngine.render3DNetwork('network-container', data.nodes, data.edges);
 
-        if (nodes.length >= 2) NetworkEngine.render3DNetwork('conn-network-3d', nodes, filtered);
+            // Adiciona o listener de clique no gráfico para abrir o modal de mensagem
+            setTimeout(() => {
+                const plot = document.getElementById('network-container');
+                plot.on('plotly_click', function(clickData) {
+                    if (clickData.points && clickData.points.length > 0) {
+                        const pt = clickData.points[0];
+                        // Procura o node pelo label ou text correspondente
+                        const node = currentNodes.find(n => n.label === pt.text || (pt.hovertext && pt.hovertext.includes(n.label)));
+                        
+                        if (node && node.type === 'researcher') {
+                            // É um usuário da comunidade! Abre modal para enviar mensagem
+                            const emailTo = node.id.replace('researcher::', '');
+                            document.getElementById('net-action-title').innerText = `Conexão: ${node.label}`;
+                            document.getElementById('net-action-desc').innerText = `Vocês dois têm fortes ligações no tema: ${node.topic}`;
+                            
+                            const btn = document.getElementById('net-action-btn');
+                            btn.onclick = () => {
+                                // Redireciona para o chat
+                                document.getElementById('net-action-modal').style.display='none';
+                                state.page = 'Comunidade';
+                                NebulaApp.renderApp();
+                                // Preenche automaticamente o texto do chat como iniciador de conversa
+                                setTimeout(() => {
+                                    const chatInput = document.getElementById('chat-input');
+                                    if (chatInput) {
+                                        chatInput.value = `Olá ${node.label.split(' ')[0]}! Vi na Rede 3D que nós dois pesquisamos sobre ${node.topic}. Gostaria de trocar referências?`;
+                                        chatInput.focus();
+                                    }
+                                }, 100);
+                            };
+                            
+                            document.getElementById('net-action-modal').style.display = 'block';
+                        }
+                    }
+                });
+            }, 500);
 
-        // Chain
-        const chain = NetworkEngine.buildConnectionChainNetwork(state, state.current_user, 10);
-        if (chain.nodes.length && chain.edges.length) {
-            document.getElementById('conn-chain-wrap').style.display = 'block';
-            NetworkEngine.render3DNetwork('conn-chain-3d', chain.nodes, chain.edges);
-        }
-
-        // Edges table
-        if (filtered.length) {
-            const wrap = document.getElementById('conn-edges-wrap');
-            wrap.style.display = 'block';
-            const sorted = filtered.sort((a,b) => b.weight - a.weight).slice(0, 20);
-            let tableHtml = `<table class="data-table"><tr><th>Documento A</th><th>Documento B</th><th>Similaridade</th><th>Mesmo tema</th></tr>`;
-            sorted.forEach(e => {
-                if (e.source < nodes.length && e.target < nodes.length) {
-                    tableHtml += `<tr><td>${nodes[e.source].label}</td><td>${nodes[e.target].label}</td><td>${(e.weight*100).toFixed(1)}%</td><td>${e.same_topic ? 'Sim' : 'Não'}</td></tr>`;
-                }
-            });
-            tableHtml += `</table>`;
-            document.getElementById('conn-edges-table').innerHTML = tableHtml;
-        }
-
-        // Connected users
-        if (connections.length) {
-            document.getElementById('conn-users-wrap').style.display = 'block';
-            document.getElementById('conn-users-list').innerHTML = connections.slice(0, 8).map(conn => {
-                const topics = (conn.shared_topics || []).slice(0, 3).join(', ') || 'Sem tema dominante';
-                const docsHtml = (conn.shared_docs || []).slice(0, 2).map(p => `<div class="small-muted" style="margin-top:0.35rem">${(p.a||'').slice(0,42)} ↔ ${(p.b||'').slice(0,42)} · ${(p.similarity*100).toFixed(1)}%</div>`).join('');
-                return `<div class="doc-card"><b>${conn.name}</b><br><span class="small-muted">${conn.topic} · ${conn.similarity}%</span><div style="margin-top:0.45rem;color:#cbd5e1;font-size:0.82rem">${(conn.research||'').slice(0,170)}</div><div style="margin-top:0.45rem"><span class="tag">${topics}</span></div>${docsHtml}</div>`;
-            }).join('');
-        }
+        }, 100);
     }
-    return {render};
+
+    function switchTab(view, btnElement) {
+        document.querySelectorAll('#net-tab-global, #net-tab-social').forEach(b => b.classList.remove('active'));
+        btnElement.classList.add('active');
+        loadView(view, NebulaApp.getState());
+    }
+
+    return { render, switchTab };
 })();
