@@ -1,78 +1,67 @@
 /* ============================================================
-   AUTH — Landing Page Hero em Tela Cheia (Ilustrada)
+   AUTH — Landing Page Hero em Tela Cheia (Liquid Glass)
    ============================================================ */
 const PageAuth = (() => {
     function render(container, state) {
         container.innerHTML = `
-            <!-- Elementos animados de fundo (CSS Shapes) -->
-            <div class="floating-shape shape-1"></div>
-            <div class="floating-shape shape-2"></div>
-            <div class="floating-shape shape-3"></div>
-
             <div class="hero-container">
                 <div class="hero-content">
                     
-                    <!-- Lado Esquerdo: Textos do Hero -->
-                    <div class="hero-text-block">
-                        <h1 class="hero-title">NEBULA<br>RESEARCH</h1>
-                        <p class="hero-subtitle">
-                            Plataforma de pesquisa acadêmica ilustrada e multimodal. 
-                            Análise inteligente de documentos, gráficos avançados, 
-                            conexões 3D e interface dark/white dinâmica feita para alta velocidade.
-                        </p>
-                        <div class="flex-wrap" style="margin-bottom: 2rem;">
-                            <span class="tag tag-green">Powered by AI</span>
-                            <span class="tag">Semantic Scholar</span>
-                            <span class="tag">Crossref</span>
-                        </div>
-                    </div>
+                    <h1 class="hero-title">NEBULA RESEARCH</h1>
 
-                    <!-- Lado Direito: Caixa de Login/Registro em estilo Desenho -->
-                    <div class="hero-auth-box">
+                    <!-- Lado Direito: Caixa de Login/Registro no estilo Glass + Dark -->
+                    <div class="glass-outer hero-auth-box">
+                        
                         <div class="tabs-bar">
-                            <button class="tab-btn active" id="auth-tab-login" onclick="PageAuth.switchTab('login')">ENTRAR</button>
-                            <button class="tab-btn" id="auth-tab-register" onclick="PageAuth.switchTab('register')">CRIAR CONTA</button>
+                            <button class="tab-btn active" id="auth-tab-login" onclick="PageAuth.switchTab('login')">Entrar</button>
+                            <button class="tab-btn" id="auth-tab-register" onclick="PageAuth.switchTab('register')">Criar conta</button>
                         </div>
 
-                        <div class="tab-content active" id="auth-login-form">
-                            <div class="section-title" style="margin-bottom:1rem; border:none; padding:0;">Acesse seu acervo</div>
-                            <div class="input-group">
-                                <label class="input-label">E-mail</label>
-                                <input type="email" class="input" id="li-email" placeholder="seu@email.com">
+                        <!-- Painel sólido escuro interno -->
+                        <div class="hero-inner-panel">
+                            
+                            <div class="tab-content active" id="auth-login-form">
+                                <div class="section-title" style="margin-bottom:1.5rem; border:none; padding:0;">Acesse seu acervo seguro</div>
+                                <div class="input-group">
+                                    <label class="input-label">E-mail</label>
+                                    <input type="email" class="input" id="li-email" placeholder="seu@email.com">
+                                </div>
+                                <div class="input-group">
+                                    <label class="input-label">Senha</label>
+                                    <input type="password" class="input" id="li-pass" placeholder="Sua chave de criptografia">
+                                </div>
+                                <button class="btn btn-primary btn-full mb-1" id="li-btn">ACESSAR PLATAFORMA</button>
+                                <div class="small-muted" style="text-align:center;">
+                                    DEMO: demo@nebula.ai / demo123
+                                </div>
+                                <div id="li-error"></div>
                             </div>
-                            <div class="input-group">
-                                <label class="input-label">Senha</label>
-                                <input type="password" class="input" id="li-pass" placeholder="Senha">
-                            </div>
-                            <button class="btn btn-primary btn-full mb-1" id="li-btn">ACESSAR PLATAFORMA</button>
-                            <div class="small-muted" style="text-align:center; font-weight: 600;">
-                                DEMO: demo@nebula.ai / demo123
-                            </div>
-                            <div id="li-error"></div>
-                        </div>
 
-                        <div class="tab-content" id="auth-register-form">
-                            <div class="section-title" style="margin-bottom:1rem; border:none; padding:0;">Junte-se à Nebula</div>
-                            <div class="input-group">
-                                <label class="input-label">Nome completo</label>
-                                <input type="text" class="input" id="rg-name" placeholder="Seu nome">
+                            <div class="tab-content" id="auth-register-form">
+                                <div class="section-title" style="margin-bottom:1.5rem; border:none; padding:0;">Crie seu cofre de pesquisa</div>
+                                <div class="input-group">
+                                    <label class="input-label">Nome completo</label>
+                                    <input type="text" class="input" id="rg-name" placeholder="Seu nome">
+                                </div>
+                                <div class="input-group">
+                                    <label class="input-label">E-mail</label>
+                                    <input type="email" class="input" id="rg-email" placeholder="seu@email.com">
+                                </div>
+                                <div class="input-group">
+                                    <label class="input-label">Senha (Usada para criptografia)</label>
+                                    <input type="password" class="input" id="rg-pass" placeholder="Crie uma senha forte">
+                                </div>
+                                <div class="input-group">
+                                    <label class="input-label">Área de pesquisa</label>
+                                    <input type="text" class="input" id="rg-research" placeholder="Ex: Machine learning">
+                                </div>
+                                <button class="btn btn-primary btn-full mb-1" id="rg-btn">CONFIRMAR CADASTRO</button>
+                                <div id="rg-error"></div>
                             </div>
-                            <div class="input-group">
-                                <label class="input-label">E-mail</label>
-                                <input type="email" class="input" id="rg-email" placeholder="seu@email.com">
-                            </div>
-                            <div class="input-group">
-                                <label class="input-label">Senha</label>
-                                <input type="password" class="input" id="rg-pass" placeholder="Crie uma senha">
-                            </div>
-                            <div class="input-group">
-                                <label class="input-label">Área de pesquisa</label>
-                                <input type="text" class="input" id="rg-research" placeholder="Ex: Machine learning">
-                            </div>
-                            <button class="btn btn-primary btn-full mb-1" id="rg-btn">CONFIRMAR CADASTRO</button>
-                            <div id="rg-error"></div>
-                        </div>
-                    </div>
+
+                        </div> <!-- end hero-inner-panel -->
+
+                    </div> <!-- end glass-outer -->
                     
                 </div>
             </div>
@@ -84,6 +73,8 @@ const PageAuth = (() => {
             const pass = document.getElementById('li-pass').value;
             const user = state.users[email];
             if (user && user.password === NebulaStorage.hashPasswordSync(pass)) {
+                // Configura a chave de criptografia baseada na senha
+                NebulaStorage.setEncryptionKey(pass);
                 state.logged_in = true;
                 state.current_user = email;
                 if (!state.user_interest[email]) state.user_interest[email] = {};
