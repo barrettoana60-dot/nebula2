@@ -176,33 +176,27 @@ const NetworkEngine = (() => {
     }
 
     function compareRepositories(state, baseEmail, otherEmail) {
-        const baseDocs = (state.workspaces[baseEmail] || {}).repository || [];
-        const otherDocs = (state.workspaces[otherEmail] || {}).repository || [];
-        if (!baseDocs.length || !otherDocs.length) return null;
+        const baseProfile = state.user_interest[baseEmail] || {};
+        const otherProfile = state.user_interest[otherEmail] || {};
+        
+        const baseTerms = Object.keys(baseProfile);
+        const otherTerms = Object.keys(otherProfile);
+        
+        if (!baseTerms.length || !otherTerms.length) return null;
         
         let sim = 0;
-        const shared_topics = [];
         const shared_terms = [];
-        const baseTopics = baseDocs.map(d=>d.topic);
-        const baseKeywords = new Set();
-        baseDocs.forEach(d => (d.keywords || []).slice(0, 10).forEach(k => baseKeywords.add(k)));
-
-        otherDocs.forEach(d => {
-            if (baseTopics.includes(d.topic) && !shared_topics.includes(d.topic)) {
-                shared_topics.push(d.topic);
-                sim += 15;
+        
+        baseTerms.forEach(term => {
+            if (otherProfile[term]) {
+                shared_terms.push(term);
+                // Weight by frequency
+                sim += Math.min(baseProfile[term], otherProfile[term]) * 10;
             }
-            // Keyword overlap
-            (d.keywords || []).slice(0, 10).forEach(k => {
-                if (baseKeywords.has(k) && !shared_terms.includes(k)) {
-                    shared_terms.push(k);
-                    sim += 3;
-                }
-            });
         });
         
         if (sim < 5) return null;
-        return { shared_topics, shared_terms: shared_terms.slice(0, 8), similarity: Math.min(sim, 99) };
+        return { shared_topics: shared_terms.slice(0, 3), shared_terms: shared_terms.slice(0, 8), similarity: Math.min(sim, 99) };
     }
 
     function getConnectedUsers(state, email, limit = 8) {

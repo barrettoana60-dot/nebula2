@@ -36,6 +36,7 @@ const NebulaTutorial = (() => {
     ];
 
     function start() {
+        console.log("[Tutorial] Start triggered");
         if (document.getElementById('tour-overlay')) return;
         currentStep = 0;
         

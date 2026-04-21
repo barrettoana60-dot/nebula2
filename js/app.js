@@ -26,8 +26,10 @@ const NebulaApp = (() => {
         renderPage();
 
         // Tutorial on first access
+        console.log("[NebulaApp] Checking tutorial. completed status:", state.users[state.current_user]?.tutorial_completed);
         if (NebulaTutorial.shouldShow(state)) {
-            setTimeout(() => NebulaTutorial.start(), 600);
+            console.log("[NebulaApp] Starting tutorial...");
+            setTimeout(() => NebulaTutorial.start(), 800);
         }
     }
 
