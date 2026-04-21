@@ -3,6 +3,16 @@
    ============================================================ */
 const PageDashboard = (() => {
     function render(container, state) {
+        try {
+            _render(container, state);
+        } catch (e) {
+            container.innerHTML = `<div style="padding:2rem;color:red;font-size:1.2rem;background:#000;">
+                <b>CRASH NO DASHBOARD:</b><br><br>${e.message}<br><br><pre style="white-space:pre-wrap;font-size:0.9rem;">${e.stack}</pre>
+            </div>`;
+        }
+    }
+
+    function _render(container, state) {
         const user = state.users[state.current_user] || {};
         const docs = state.repository || [];
         const research = user.research || '';
@@ -35,7 +45,7 @@ const PageDashboard = (() => {
                 </div>
                 <div class="metric-card purple">
                     <div class="metric-label">Buscas</div>
-                    <div class="metric-value">${state.search_history.length}</div>
+                    <div class="metric-value">${state.search_history ? state.search_history.length : 0}</div>
                     <div class="metric-desc">Registradas</div>
                 </div>
                 <div class="metric-card yellow">

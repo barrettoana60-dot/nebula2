@@ -30,6 +30,16 @@ const PageChat = (() => {
     }
 
     function render(container, state) {
+        try {
+            _render(container, state);
+        } catch (e) {
+            container.innerHTML = `<div style="padding:2rem;color:red;font-size:1.2rem;background:#000;">
+                <b>CRASH NA COMUNIDADE:</b><br><br>${e.message}<br><br><pre style="white-space:pre-wrap;font-size:0.9rem;">${e.stack}</pre>
+            </div>`;
+        }
+    }
+
+    function _render(container, state) {
         const email = state.current_user;
         const connections = getConnectedUsers(state, email, 12);
         const rooms = getAvailableRooms(state, email);
