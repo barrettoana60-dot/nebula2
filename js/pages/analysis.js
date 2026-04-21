@@ -113,38 +113,46 @@ const PageAnalysis = (() => {
         });
 
         // 1. World Map (Choropleth)
-        // Tentamos extrair nacionalidades usando a função inferNationality do TextEngine
         let countryCounts = {};
         docs.forEach(d => {
-            const c = TextEngine.inferNationality(d.text || '');
-            if (c) countryCounts[c] = (countryCounts[c] || 0) + 1;
+            const c = d.nationality || TextEngine.inferNationality(d.text || '');
+            if (c && c !== 'Desconhecido') countryCounts[c] = (countryCounts[c] || 0) + 1;
         });
         
-        // Fallback visual se não achar nada
-        if (Object.keys(countryCounts).length === 0) {
-            countryCounts = {'USA': 5, 'BRA': 3, 'GBR': 2, 'FRA': 1, 'DEU': 1}; // Dummy data para visualização caso o acervo seja muito curto
+        // Convert country names to ISO-3 codes for Plotly
+        const isoCountryCounts = {};
+        for (const [name, count] of Object.entries(countryCounts)) {
+            const iso = TextEngine.countryToISO3(name);
+            if (iso) isoCountryCounts[iso] = (isoCountryCounts[iso] || 0) + count;
         }
 
-        const mapLocations = Object.keys(countryCounts);
-        const mapZ = Object.values(countryCounts);
+        const mapLocations = Object.keys(isoCountryCounts);
+        const mapZ = Object.values(isoCountryCounts);
+        const mapHoverText = Object.keys(countryCounts);
         
-        Plotly.newPlot('chart-map', [{
-            type: 'choropleth',
-            locationmode: 'ISO-3',
-            locations: mapLocations,
-            z: mapZ,
-            colorscale: [ [0, 'rgba(217, 119, 74, 0.1)'], [1, '#d9774a'] ],
-            showscale: false,
-            marker: { line: { color: 'rgba(255,255,255,0.2)', width: 1 } }
-        }], {
-            height: 350, margin: {l:0, r:0, t:0, b:0}, paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)',
-            geo: {
-                showframe: false, showcoastlines: true, projection: { type: 'equirectangular' },
-                bgcolor: 'rgba(0,0,0,0)', coastlinecolor: 'rgba(255,255,255,0.2)',
-                showland: true, landcolor: 'rgba(20,20,20,0.5)',
-                showocean: true, oceancolor: 'transparent'
-            }
-        }, plotConfig);
+        if (!mapLocations.length) {
+            document.getElementById('chart-map').innerHTML = `<div class="small-muted" style="padding:2rem;text-align:center">Envie mais documentos para o sistema identificar os países de origem.</div>`;
+        } else {
+            Plotly.newPlot('chart-map', [{
+                type: 'choropleth',
+                locationmode: 'ISO-3',
+                locations: mapLocations,
+                z: mapZ,
+                text: mapHoverText,
+                colorscale: [ [0, 'rgba(217, 119, 74, 0.2)'], [1, '#d9774a'] ],
+                showscale: false,
+                marker: { line: { color: 'rgba(255,255,255,0.2)', width: 1 } },
+                hovertemplate: '%{text}: %{z} artigo(s)<extra></extra>'
+            }], {
+                height: 350, margin: {l:0, r:0, t:0, b:0}, paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)',
+                geo: {
+                    showframe: false, showcoastlines: true, projection: { type: 'equirectangular' },
+                    bgcolor: 'rgba(0,0,0,0)', coastlinecolor: 'rgba(255,255,255,0.2)',
+                    showland: true, landcolor: 'rgba(20,20,20,0.5)',
+                    showocean: true, oceancolor: 'transparent'
+                }
+            }, plotConfig);
+        }
 
 
         // 2. Timeline (Temporal)

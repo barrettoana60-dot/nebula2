@@ -31,9 +31,6 @@ const PageAuth = (() => {
                                     <input type="password" class="input" id="li-pass" placeholder="Sua chave de criptografia">
                                 </div>
                                 <button class="btn btn-primary btn-full mb-1" id="li-btn">ACESSAR PLATAFORMA</button>
-                                <div class="small-muted" style="text-align:center;">
-                                    DEMO: demo@nebula.ai / demo123
-                                </div>
                                 <div id="li-error"></div>
                             </div>
 

@@ -182,16 +182,27 @@ const NetworkEngine = (() => {
         
         let sim = 0;
         const shared_topics = [];
+        const shared_terms = [];
         const baseTopics = baseDocs.map(d=>d.topic);
+        const baseKeywords = new Set();
+        baseDocs.forEach(d => (d.keywords || []).slice(0, 10).forEach(k => baseKeywords.add(k)));
+
         otherDocs.forEach(d => {
             if (baseTopics.includes(d.topic) && !shared_topics.includes(d.topic)) {
                 shared_topics.push(d.topic);
                 sim += 15;
             }
+            // Keyword overlap
+            (d.keywords || []).slice(0, 10).forEach(k => {
+                if (baseKeywords.has(k) && !shared_terms.includes(k)) {
+                    shared_terms.push(k);
+                    sim += 3;
+                }
+            });
         });
         
-        if (sim < 10) return null;
-        return { shared_topics, similarity: Math.min(sim, 99) };
+        if (sim < 5) return null;
+        return { shared_topics, shared_terms: shared_terms.slice(0, 8), similarity: Math.min(sim, 99) };
     }
 
     function getConnectedUsers(state, email, limit = 8) {

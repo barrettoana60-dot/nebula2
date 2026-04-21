@@ -6,6 +6,7 @@ const NebulaApp = (() => {
 
     function init() {
         state = NebulaStorage.initState();
+        initRippleEffect();
         renderApp();
     }
 
@@ -23,6 +24,11 @@ const NebulaApp = (() => {
         navbar.style.display = 'flex';
         renderNavbar();
         renderPage();
+
+        // Tutorial on first access
+        if (NebulaTutorial.shouldShow(state)) {
+            setTimeout(() => NebulaTutorial.start(), 600);
+        }
     }
 
     function renderNavbar() {
@@ -76,6 +82,23 @@ const NebulaApp = (() => {
     }
 
     function getState() { return state; }
+
+    // Ripple effect on all buttons
+    function initRippleEffect() {
+        document.addEventListener('click', (e) => {
+            const btn = e.target.closest('.btn');
+            if (!btn) return;
+            const ripple = document.createElement('span');
+            ripple.classList.add('btn-ripple');
+            const rect = btn.getBoundingClientRect();
+            const size = Math.max(rect.width, rect.height) * 2;
+            ripple.style.width = ripple.style.height = size + 'px';
+            ripple.style.left = (e.clientX - rect.left - size / 2) + 'px';
+            ripple.style.top = (e.clientY - rect.top - size / 2) + 'px';
+            btn.appendChild(ripple);
+            ripple.addEventListener('animationend', () => ripple.remove());
+        });
+    }
 
     return { init, renderApp, renderPage, navigate, logout, quickSearch, recommendTerms, getState };
 })();

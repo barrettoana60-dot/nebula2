@@ -40,6 +40,32 @@ const TextEngine = (() => {
         "Japão":{lat:36.2,lon:138.3},"Canadá":{lat:56.1,lon:-106.3},"Austrália":{lat:-25.3,lon:133.8},
         "Holanda":{lat:52.3,lon:4.9},"Suécia":{lat:60.1,lon:18.6},"Suíça":{lat:46.8,lon:8.2},
         "Coreia do Sul":{lat:35.9,lon:127.8},"Singapura":{lat:1.3,lon:103.8},
+        "Colômbia":{lat:4.6,lon:-74.1},"Chile":{lat:-35.7,lon:-71.5},"Peru":{lat:-9.2,lon:-75.0},
+        "Rússia":{lat:61.5,lon:105.3},"Noruega":{lat:60.5,lon:8.5},"Dinamarca":{lat:56.3,lon:9.5},
+        "Finlândia":{lat:61.9,lon:25.7},"Áustria":{lat:47.5,lon:14.6},"Bélgica":{lat:50.5,lon:4.5},
+        "Irlanda":{lat:53.1,lon:-7.7},"Israel":{lat:31.0,lon:34.9},"Turquia":{lat:39.9,lon:32.9},
+        "Polônia":{lat:51.9,lon:19.1},"República Tcheca":{lat:49.8,lon:15.5},
+    };
+
+    const COUNTRY_ISO3 = {
+        "Brasil":"BRA","Portugal":"PRT","Estados Unidos":"USA","México":"MEX","Argentina":"ARG",
+        "Reino Unido":"GBR","França":"FRA","Alemanha":"DEU","Itália":"ITA","Espanha":"ESP",
+        "Índia":"IND","China":"CHN","Japão":"JPN","Canadá":"CAN","Austrália":"AUS",
+        "Holanda":"NLD","Suécia":"SWE","Suíça":"CHE","Coreia do Sul":"KOR","Singapura":"SGP",
+        "Colômbia":"COL","Chile":"CHL","Peru":"PER","Rússia":"RUS","Noruega":"NOR",
+        "Dinamarca":"DNK","Finlândia":"FIN","Áustria":"AUT","Bélgica":"BEL",
+        "Irlanda":"IRL","Israel":"ISR","Turquia":"TUR","Polônia":"POL","República Tcheca":"CZE",
+    };
+
+    const UNIVERSITY_COUNTRY = {
+        "usp":"Brasil","unicamp":"Brasil","ufrj":"Brasil","ufmg":"Brasil","unesp":"Brasil","puc":"Brasil","fiocruz":"Brasil",
+        "mit":"Estados Unidos","harvard":"Estados Unidos","stanford":"Estados Unidos","yale":"Estados Unidos","princeton":"Estados Unidos","berkeley":"Estados Unidos","columbia":"Estados Unidos","caltech":"Estados Unidos",
+        "oxford":"Reino Unido","cambridge":"Reino Unido","imperial":"Reino Unido","ucl":"Reino Unido",
+        "sorbonne":"França","cnrs":"França","max planck":"Alemanha","eth zurich":"Suíça",
+        "university of toronto":"Canadá","mcgill":"Canadá","universidad de buenos aires":"Argentina",
+        "universidade do porto":"Portugal","universidade de coimbra":"Portugal","universidade de lisboa":"Portugal",
+        "tsinghua":"China","peking university":"China","university of tokyo":"Japão","kyoto university":"Japão",
+        "karolinska":"Suécia","leiden":"Holanda","bologna":"Itália","sapienza":"Itália",
     };
 
     function normalize(text) {
@@ -124,10 +150,23 @@ const TextEngine = (() => {
 
     function inferNationality(text) {
         const t = normalize(text);
+        // 1. Check direct country mentions
         for (const country of Object.keys(NATIONALITY_COORDS)) {
-            if (t.includes(country.toLowerCase())) return country;
+            if (t.includes(normalize(country))) return country;
         }
-        return 'Brasil';
+        // 2. Check university/institution mentions
+        for (const [uni, country] of Object.entries(UNIVERSITY_COUNTRY)) {
+            if (t.includes(normalize(uni))) return country;
+        }
+        // 3. Language-based heuristic for short texts
+        const lang = detectLanguage(text);
+        if (lang === 'Português') return 'Brasil';
+        if (lang === 'Inglês') return 'Estados Unidos';
+        return 'Desconhecido';
+    }
+
+    function countryToISO3(countryName) {
+        return COUNTRY_ISO3[countryName] || null;
     }
 
     function cosineSimilarity(textA, textB) {
@@ -156,14 +195,31 @@ const TextEngine = (() => {
     }
 
     function extractAuthor(text) {
+        if (!text || text.length < 20) return 'Desconhecido';
+        // Search only in the first 3000 chars (header area of documents)
+        const header = text.slice(0, 3000);
         const patterns = [
-            /(?:author|autor|autores|authors)[:\s]+([A-ZÀ-ÿ][A-Za-zÀ-ÿ\s,\.]{5,80})/i,
-            /(?:by|por)\s+([A-ZÀ-ÿ][A-Za-zÀ-ÿ\s]{5,60})/i,
-            /\b([A-Z][a-zà-ÿ]+(?:\s+[A-Z][a-zà-ÿ]+){1,3})\s*\n/,
+            // Explicit labels
+            /(?:authors?|autore?s?|by|por|written by|escrito por)[:\s—–-]+([A-ZÀ-ÿ][A-Za-zÀ-ÿ\s,\.;&]{5,120})/i,
+            // Academic format: LASTNAME, Firstname
+            /\n\s*([A-ZÀ-Ÿ]{2,}[,;]\s*[A-ZÀ-ÿ][a-zà-ÿ]+(?:\s+[A-ZÀ-ÿ][a-zà-ÿ]*)*)/,
+            // Name at start of line after title-like text
+            /\n\s*([A-ZÀ-ÿ][a-zà-ÿ]+(?:\s+[A-ZÀ-ÿ][a-zà-ÿ]+){1,4})\s*(?:\n|\d{4}|\()/,
+            // Simple name pattern with 2-4 capitalized words
+            /([A-ZÀ-ÿ][a-zà-ÿ]+(?:\s+(?:de|da|do|dos|das|e|van|von|del|di)\s+)?[A-ZÀ-ÿ][a-zà-ÿ]+(?:\s+[A-ZÀ-ÿ][a-zà-ÿ]+){0,2})\s*\n/,
         ];
         for (const pat of patterns) {
-            const m = text.match(pat);
-            if (m && m[1].trim().length > 5 && m[1].trim().length < 80) return m[1].trim();
+            const m = header.match(pat);
+            if (m) {
+                let author = m[1].trim().replace(/[\n\r]+/g, ' ').replace(/\s+/g, ' ');
+                // Clean trailing punctuation
+                author = author.replace(/[,;.]+$/, '').trim();
+                // Filter out common false positives
+                const lower = author.toLowerCase();
+                const falsePositives = ['resumo', 'abstract', 'introduction', 'introdução', 'palavras', 'keywords', 'artigo', 'article', 'capítulo', 'chapter', 'universidade', 'university', 'revista', 'journal', 'volume'];
+                if (falsePositives.some(fp => lower.includes(fp))) continue;
+                if (author.length > 5 && author.length < 120) return author;
+            }
         }
         return 'Desconhecido';
     }
@@ -194,6 +250,31 @@ const TextEngine = (() => {
             estimated_pages: Math.max(1, Math.round(words.length / 300)),
             reading_time_min: Math.max(1, Math.round(words.length / 200)),
         };
+    }
+
+    function generateContextualSummary(text, topic, kind) {
+        if (!text || text.length < 50) return `Arquivo do tipo ${kind || 'documento'}.`;
+        const baseSummary = summarizeExtractive(text, 3);
+        const kindLabel = kind === 'PDF' ? 'artigo' : kind === 'Word' ? 'documento' : kind === 'CSV' ? 'planilha' : 'documento';
+        const topicLabel = topic && topic !== 'Pesquisa Geral' ? ` na área de ${topic}` : '';
+        return `Este ${kindLabel}${topicLabel} aborda: ${baseSummary}`;
+    }
+
+    function extractReferences(text) {
+        if (!text || text.length < 200) return { count: 0, samples: [] };
+        const tail = text.slice(-Math.min(text.length, 8000));
+        const refs = [];
+        // Pattern 1: [1] Author...
+        const bracketRefs = tail.match(/\[\d+\]\s*[A-ZÀ-ÿ][^\[]{10,200}/g) || [];
+        bracketRefs.forEach(r => refs.push(r.trim().slice(0, 150)));
+        // Pattern 2: LASTNAME, F. (Year).
+        const apaRefs = tail.match(/[A-ZÀ-Ÿ]{2,}[,.]\s*[A-ZÀ-ÿ]\..*?\(\d{4}\)/g) || [];
+        apaRefs.forEach(r => refs.push(r.trim().slice(0, 150)));
+        // Pattern 3: Numbered refs: 1. Author...
+        const numRefs = tail.match(/^\d+\.\s+[A-ZÀ-ÿ][A-Za-zÀ-ÿ\s,\.]+/gm) || [];
+        numRefs.forEach(r => refs.push(r.trim().slice(0, 150)));
+        const unique = [...new Set(refs)];
+        return { count: unique.length, samples: unique.slice(0, 10) };
     }
 
     function recognizeIntent(query) {
@@ -283,11 +364,12 @@ const TextEngine = (() => {
     }
 
     return {
-        STOPWORDS, TOPIC_RULES, NATIONALITY_COORDS,
+        STOPWORDS, TOPIC_RULES, NATIONALITY_COORDS, COUNTRY_ISO3,
         normalize, tokenize, extractKeywordsTFIDF, summarizeExtractive,
-        detectTopic, detectYears, inferNationality,
+        detectTopic, detectYears, inferNationality, countryToISO3,
         cosineSimilarity, scoreRelevance,
         extractAuthor, detectLanguage, computeReadability,
+        generateContextualSummary, extractReferences,
         recognizeIntent, safeTopValue, counter,
         updateProfile, calculateAffinity, getRecommendations
     };

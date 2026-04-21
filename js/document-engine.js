@@ -148,18 +148,15 @@ const DocumentEngine = (() => {
         }
 
         const keywords = TextEngine.extractKeywordsTFIDF(text || fileName, 25);
-        const summary = TextEngine.summarizeExtractive(text, 4) || `Arquivo do tipo ${kind}.`;
         const topic = TextEngine.detectTopic(text || fileName);
+        const summary = TextEngine.generateContextualSummary(text, topic, kind) || `Arquivo do tipo ${kind}.`;
         const years = TextEngine.detectYears(text);
         const nationality = TextEngine.inferNationality(text || fileName);
         const author = text ? TextEngine.extractAuthor(text) : 'Desconhecido';
         const language = text ? TextEngine.detectLanguage(text) : 'Desconhecido';
         const sections = (text && kind === 'PDF') ? analyzeDocumentStructure(text) : {};
         const readability = text ? TextEngine.computeReadability(text) : {};
-
-        const tailText = text.slice(-3000);
-        const refs = tailText.match(/\[\d+\]|\d+\.\s+[A-ZÀ-ÿ][a-zà-ÿ]+/g) || [];
-        const refCount = new Set(refs.slice(0, 50)).size;
+        const refsData = TextEngine.extractReferences(text);
 
         const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 
@@ -171,7 +168,11 @@ const DocumentEngine = (() => {
             text: text.slice(0, 12000),
             full_text_len: text.length,
             image_meta: imageMeta, size_kb: sizeKB,
-            sections, readability, ref_count: refCount,
+            sections, readability,
+            ref_count: refsData.count,
+            ref_samples: refsData.samples,
+            visibility: 'private',
+            public_until: null,
         };
     }
 
