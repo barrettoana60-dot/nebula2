@@ -50,6 +50,25 @@ const NebulaStorage = (() => {
         }
     }
 
+    /**
+     * Gera UUID v4 compatível com Supabase
+     */
+    function generateUUID() {
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+            const r = Math.random() * 16 | 0;
+            const v = c === 'x' ? r : (r & 0x3 | 0x8);
+            return v.toString(16);
+        });
+    }
+
+    /**
+     * Verifica se um ID é um UUID v4 válido (compatível com Supabase)
+     */
+    function isValidUUID(id) {
+        if (!id || typeof id !== 'string') return false;
+        return /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
+    }
+
     function blankWorkspace() {
         return { repository: [], search_history: [] };
     }
@@ -116,7 +135,11 @@ const NebulaStorage = (() => {
             }
         }
         
-        state.repository = repo;
+        // Merge: manter documentos locais que ainda não foram salvos no banco
+        const dbIds = new Set(repo.map(d => d.id));
+        const localOnlyDocs = (state.repository || []).filter(d => d.id && !dbIds.has(d.id));
+        
+        state.repository = [...repo, ...localOnlyDocs];
 
         // Buscar histórico
         const { data: history } = await NebulaSupabase.from('search_history').select('*').eq('user_id', state.current_uid).order('created_at', { ascending: true });
@@ -130,7 +153,6 @@ const NebulaStorage = (() => {
     }
 
     // Salva (Push) as alterações no Supabase.
-    // Como o app antigo salvava a "árvore toda" de uma vez, precisamos fazer chamadas específicas.
     async function saveStateAsync(state) {
         if (!state.logged_in || !state.current_user || !state.current_uid) return;
 
@@ -145,11 +167,11 @@ const NebulaStorage = (() => {
             }).eq('id', state.current_uid);
         }
 
-        // 2. Atualizar Repositório (Upsert: Atualiza existentes, Insere novos)
-        // Para otimização, deveríamos enviar apenas o que mudou, 
-        // mas como a arquitetura atual sobrescreve o array inteiro, vamos fazer um upsert massivo.
+        // 2. Atualizar Repositório
         if (state.repository && state.repository.length > 0) {
-            const docsToSave = [];
+            const newDocs = [];
+            const existingDocs = [];
+
             for (const doc of state.repository) {
                 // Clonar para não alterar o estado visual
                 const dbDoc = { ...doc, user_id: state.current_uid };
@@ -158,26 +180,44 @@ const NebulaStorage = (() => {
                 if (dbDoc.text && !dbDoc.text.startsWith('ENC::')) dbDoc.text = await encryptText(dbDoc.text);
                 if (dbDoc.summary && !dbDoc.summary.startsWith('ENC::')) dbDoc.summary = await encryptText(dbDoc.summary);
                 
-                // Se o documento é novo no front-end e não tem UUID de banco, removemos o 'id' para o Supabase gerar,
-                // ou usamos um UUID gerado localmente. Se o app front-end não gera UUIDs perfeitos, 
-                // deixamos o Supabase resolver se não tiver.
-                if (!dbDoc.id || String(dbDoc.id).length < 10) {
-                    delete dbDoc.id; // supabase cuidará do UUID
+                // Verificar se tem UUID válido
+                if (isValidUUID(dbDoc.id)) {
+                    existingDocs.push(dbDoc);
+                } else {
+                    // Gerar UUID v4 compatível
+                    const newId = generateUUID();
+                    dbDoc.id = newId;
+                    // Atualizar o ID no state local também
+                    doc.id = newId;
+                    newDocs.push(dbDoc);
                 }
-
-                docsToSave.push(dbDoc);
             }
             
-            // Inserir os que não têm ID
-            const newDocs = docsToSave.filter(d => !d.id);
+            // Inserir documentos novos
             if (newDocs.length > 0) {
-                const { data } = await NebulaSupabase.from('documents').insert(newDocs).select();
-                // Sincronizar os IDs recém criados de volta pro state local (simplificado: recarrega tudo)
+                try {
+                    const { data, error } = await NebulaSupabase.from('documents').insert(newDocs).select();
+                    if (error) {
+                        console.error('[Storage] Insert error:', error);
+                    } else if (data) {
+                        // Atualizar IDs no state local com os retornados pelo banco
+                        data.forEach(dbDoc => {
+                            const localDoc = state.repository.find(d => d.name === dbDoc.name && d.uploaded_at === dbDoc.uploaded_at);
+                            if (localDoc) localDoc.id = dbDoc.id;
+                        });
+                    }
+                } catch (insertErr) {
+                    console.error('[Storage] Insert exception:', insertErr);
+                }
             }
             
-            const existingDocs = docsToSave.filter(d => d.id);
+            // Atualizar documentos existentes
             if (existingDocs.length > 0) {
-                await NebulaSupabase.from('documents').upsert(existingDocs);
+                try {
+                    await NebulaSupabase.from('documents').upsert(existingDocs);
+                } catch (upsertErr) {
+                    console.error('[Storage] Upsert exception:', upsertErr);
+                }
             }
         }
 
@@ -194,7 +234,7 @@ const NebulaStorage = (() => {
             }
         }
 
-        // 4. Mensagens: Inserções são tratadas de forma isolada na UI, mas se houver novas aqui:
+        // 4. Mensagens
         const newMessages = state.community_messages.filter(m => !m.id).map(m => ({
             sender_email: m.sender_email,
             receiver_email: m.receiver_email,
@@ -205,9 +245,6 @@ const NebulaStorage = (() => {
         if (newMessages.length > 0) {
             await NebulaSupabase.from('messages').insert(newMessages);
         }
-        
-        // Pequena resincronização visual
-        syncWorkspaceState(state, state.current_user);
     }
 
     function saveState(state) {
@@ -218,6 +255,8 @@ const NebulaStorage = (() => {
         setEncryptionKey,
         encryptText,
         decryptText,
+        generateUUID,
+        isValidUUID,
         blankWorkspace,
         initState,
         saveState,

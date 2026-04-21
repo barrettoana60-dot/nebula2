@@ -1,5 +1,5 @@
 /* ============================================================
-   DOCUMENT ENGINE — PDF/DOCX/CSV parsing, document analysis
+   DOCUMENT ENGINE — PDF/DOCX/CSV parsing + AI-powered analysis
    ============================================================ */
 const DocumentEngine = (() => {
     const MAX_TEXT = 80000;
@@ -125,13 +125,26 @@ const DocumentEngine = (() => {
         });
     }
 
-    async function makeDocumentRecord(file) {
+    /**
+     * Gera UUID v4 compatível com Supabase
+     */
+    function generateUUID() {
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+            const r = Math.random() * 16 | 0;
+            const v = c === 'x' ? r : (r & 0x3 | 0x8);
+            return v.toString(16);
+        });
+    }
+
+    async function makeDocumentRecord(file, progressCallback) {
         const fileName = file.name;
         const kind = fileKind(fileName);
         const suffix = fileName.split('.').pop()?.toLowerCase() || '';
         const bytes = await file.arrayBuffer();
         const sizeKB = Math.round(file.size / 1024 * 10) / 10;
 
+        // 1. Extrair texto do arquivo
+        if (progressCallback) progressCallback('Extraindo texto...');
         let text = '';
         if (suffix === 'pdf') {
             text = await extractTextFromPDF(bytes);
@@ -147,32 +160,79 @@ const DocumentEngine = (() => {
             imageMeta = await analyzeImage(file);
         }
 
-        const keywords = TextEngine.extractKeywordsTFIDF(text || fileName, 25);
-        const topic = TextEngine.detectTopic(text || fileName);
-        const summary = TextEngine.generateContextualSummary(text, topic, kind) || `Arquivo do tipo ${kind}.`;
+        // 2. Tentar análise via IA (Groq/Llama 3.3)
+        let aiData = null;
+        if (text && text.length >= 30 && typeof NebulaAI !== 'undefined') {
+            if (progressCallback) progressCallback('Analisando com IA...');
+            try {
+                aiData = await NebulaAI.analyzeDocument(text, fileName, kind);
+                if (aiData) {
+                    console.log('[DocumentEngine] AI analysis successful for:', fileName);
+                }
+            } catch (aiErr) {
+                console.warn('[DocumentEngine] AI analysis failed, using local fallback:', aiErr);
+            }
+        }
+
+        // 3. Usar dados da IA se disponíveis, senão fallback para TextEngine local
+        let keywords, topic, summary, author, language, nationality, year;
+        let docType = kind;
+        let keyFindings = null;
+        let methodology = null;
+        let refCount = 0;
+
+        if (aiData) {
+            // IA analisou com sucesso — usar dados reais
+            keywords = aiData.keywords.length > 0 ? aiData.keywords : TextEngine.extractKeywordsTFIDF(text || fileName, 25);
+            topic = aiData.topic || TextEngine.detectTopic(text || fileName);
+            summary = aiData.summary || TextEngine.generateContextualSummary(text, topic, kind);
+            author = aiData.author || 'Desconhecido';
+            language = aiData.language || TextEngine.detectLanguage(text);
+            nationality = aiData.nationality || TextEngine.inferNationality(text || fileName);
+            year = aiData.year || (TextEngine.detectYears(text)[0] || new Date().getFullYear());
+            docType = aiData.document_type || kind;
+            keyFindings = aiData.key_findings;
+            methodology = aiData.methodology;
+            refCount = aiData.references_detected || 0;
+        } else {
+            // Fallback: análise local com TextEngine
+            if (progressCallback) progressCallback('Analisando localmente...');
+            keywords = TextEngine.extractKeywordsTFIDF(text || fileName, 25);
+            topic = TextEngine.detectTopic(text || fileName);
+            summary = TextEngine.generateContextualSummary(text, topic, kind) || `Arquivo do tipo ${kind}.`;
+            author = text ? TextEngine.extractAuthor(text) : 'Desconhecido';
+            language = text ? TextEngine.detectLanguage(text) : 'Desconhecido';
+            nationality = TextEngine.inferNationality(text || fileName);
+            year = TextEngine.detectYears(text)[0] || new Date().getFullYear();
+            const refsData = TextEngine.extractReferences(text);
+            refCount = refsData.count;
+        }
+
         const years = TextEngine.detectYears(text);
-        const nationality = TextEngine.inferNationality(text || fileName);
-        const author = text ? TextEngine.extractAuthor(text) : 'Desconhecido';
-        const language = text ? TextEngine.detectLanguage(text) : 'Desconhecido';
         const sections = (text && kind === 'PDF') ? analyzeDocumentStructure(text) : {};
         const readability = text ? TextEngine.computeReadability(text) : {};
         const refsData = TextEngine.extractReferences(text);
 
-        const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+        // UUID compatível com Supabase
+        const id = generateUUID();
 
         return {
             id, name: fileName, kind, topic, summary, keywords,
-            author, years, year: years[0] || new Date().getFullYear(),
+            author, years, year: year,
             nationality, language,
             uploaded_at: new Date().toISOString().slice(0, 16).replace('T', ' '),
             text: text.slice(0, 12000),
             full_text_len: text.length,
             image_meta: imageMeta, size_kb: sizeKB,
             sections, readability,
-            ref_count: refsData.count,
+            ref_count: refCount || refsData.count,
             ref_samples: refsData.samples,
             visibility: 'private',
             public_until: null,
+            document_type: docType,
+            key_findings: keyFindings,
+            methodology: methodology,
+            ai_analyzed: !!aiData,
         };
     }
 
@@ -201,7 +261,7 @@ const DocumentEngine = (() => {
 
     return {
         extractTextFromPDF, extractTextFromDOCX,
-        fileKind, makeDocumentRecord,
+        fileKind, makeDocumentRecord, generateUUID,
         relatedDocuments, localSearch,
         analyzeImage,
     };

@@ -5,7 +5,7 @@ const PageRepository = (() => {
     function render(container, state) {
         let html = `
             <div class="page-title">Repositório</div>
-            <div class="page-sub">Envie seus documentos para análise completa: texto, palavras-chave, resumo, estrutura e conexões</div>
+            <div class="page-sub">Envie seus documentos para análise completa com IA: texto, palavras-chave, resumo, estrutura e conexões</div>
             
             <div class="glass">
                 <div class="file-drop" id="repo-drop" onclick="document.getElementById('repo-file-input').click()">
@@ -40,6 +40,28 @@ const PageRepository = (() => {
         container.innerHTML = html;
         renderList(document.getElementById('repo-list-container'), state);
 
+        // Drag and drop support
+        const dropZone = document.getElementById('repo-drop');
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.style.borderColor = 'var(--copper-1)';
+            dropZone.style.background = 'rgba(217,119,74,0.05)';
+        });
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.style.borderColor = '';
+            dropZone.style.background = '';
+        });
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.style.borderColor = '';
+            dropZone.style.background = '';
+            const files = Array.from(e.dataTransfer.files);
+            if (files.length) {
+                selectedFiles = files;
+                document.getElementById('repo-file-name').textContent = `${files.length} arquivo(s) selecionado(s)`;
+            }
+        });
+
         // Visibility toggle
         const visSelect = document.getElementById('repo-visibility');
         const expiryGroup = document.getElementById('repo-expiry-group');
@@ -65,36 +87,70 @@ const PageRepository = (() => {
             const publicUntil = document.getElementById('repo-public-until').value || null;
             
             btn.disabled = true;
+            btn.textContent = 'Processando...';
             wrap.style.display = 'block';
             txt.style.display = 'block';
 
+            const newDocs = [];
             for (let i = 0; i < selectedFiles.length; i++) {
                 const file = selectedFiles[i];
-                fill.style.width = `${((i) / selectedFiles.length) * 100}%`;
-                txt.textContent = `Analisando ${file.name}...`;
+                const baseProgress = (i / selectedFiles.length) * 100;
+                fill.style.width = `${baseProgress}%`;
+                txt.textContent = `Processando ${file.name}...`;
                 
                 try {
-                    const record = await DocumentEngine.makeDocumentRecord(file);
+                    const record = await DocumentEngine.makeDocumentRecord(file, (stage) => {
+                        txt.textContent = `${file.name}: ${stage}`;
+                    });
                     record.visibility = visibility;
                     record.public_until = visibility === 'public' ? publicUntil : null;
+                    
+                    // Add to state immediately
                     state.repository.push(record);
+                    newDocs.push(record);
                     
                     // Update user interest
                     const email = state.current_user;
                     if (email) {
+                        if (!state.user_interest[email]) state.user_interest[email] = {};
                         record.keywords.slice(0, 12).forEach(t => {
                             state.user_interest[email][t] = (state.user_interest[email][t] || 0) + 1;
                         });
                     }
+
+                    // Show AI badge in progress
+                    if (record.ai_analyzed) {
+                        txt.innerHTML = `<span style="color:#10b981">Analisado com IA</span> — ${file.name}`;
+                    }
                 } catch (e) {
                     console.error('Failed to process', file.name, e);
+                    txt.textContent = `Erro ao processar ${file.name}`;
                 }
             }
 
-            NebulaStorage.saveState(state);
+            // Save state — await to ensure persistence
+            fill.style.width = '95%';
+            txt.textContent = 'Salvando no banco de dados...';
+            
+            try {
+                await NebulaStorage.saveStateAsync(state);
+            } catch (saveErr) {
+                console.error('Save failed, data is in local state:', saveErr);
+            }
+
+            fill.style.width = '100%';
+            txt.textContent = `${newDocs.length} documento(s) adicionado(s) com sucesso!`;
+            txt.style.color = '#10b981';
+            
             btn.disabled = false;
-            wrap.style.display = 'none';
-            txt.style.display = 'none';
+            btn.textContent = 'Analisar e adicionar';
+            
+            setTimeout(() => {
+                wrap.style.display = 'none';
+                txt.style.display = 'none';
+                txt.style.color = '';
+            }, 2500);
+            
             selectedFiles = [];
             fileInput.value = '';
             document.getElementById('repo-file-name').textContent = 'Clique ou arraste arquivos (PDF, DOCX, CSV, Imagens, etc.)';
@@ -154,17 +210,20 @@ const PageRepository = (() => {
                 const visIcon = doc.visibility === 'public' ? 'Público' : 'Privado';
                 const visStyle = doc.visibility === 'public' ? 'color:#10b981' : 'color:var(--text-white-60)';
                 const expiryText = doc.public_until ? ` até ${doc.public_until}` : '';
+                const aiBadge = doc.ai_analyzed ? '<span class="tag-green" style="font-size:0.7rem;padding:0.15rem 0.5rem;margin-left:0.5rem">IA</span>' : '';
 
                 return `
                     <div class="expander">
                         <div class="expander-header" onclick="this.parentElement.classList.toggle('open')">
-                            <span><b>${doc.name}</b> · ${doc.kind} · ${doc.topic} <span style="font-size:0.75rem;${visStyle};margin-left:0.5rem">${visIcon}</span></span>
+                            <span><b>${doc.name}</b> · ${doc.kind} · ${doc.topic} ${aiBadge} <span style="font-size:0.75rem;${visStyle};margin-left:0.5rem">${visIcon}</span></span>
                             <span class="arrow">▶</span>
                         </div>
                         <div class="expander-body">
                             <div class="grid-60-40 mt-1">
                                 <div>
                                     <div class="mb-1"><b>Resumo:</b><br><span class="small-muted">${doc.summary}</span></div>
+                                    ${doc.key_findings ? `<div class="mb-1"><b>Principais achados:</b><br><span class="small-muted">${doc.key_findings}</span></div>` : ''}
+                                    ${doc.methodology ? `<div class="mb-1"><b>Metodologia:</b><br><span class="small-muted">${doc.methodology}</span></div>` : ''}
                                     <div class="mb-1"><b>Palavras-chave:</b><br>${(doc.keywords||[]).slice(0, 18).map(k => `<span class="tag">${k}</span>`).join('')}</div>
                                     ${secHtml}
                                 </div>
@@ -177,12 +236,14 @@ const PageRepository = (() => {
                                             <tr><td>Idioma</td><td>${doc.language||'?'}</td></tr>
                                             <tr><td>Tamanho</td><td>${doc.size_kb||'?'} KB</td></tr>
                                             <tr><td>Origem</td><td>${doc.nationality||'Desconhecido'}</td></tr>
+                                            <tr><td>Tipo</td><td>${doc.document_type || doc.kind ||'?'}</td></tr>
                                             <tr><td>Palavras</td><td>${doc.readability?.words||'?'}</td></tr>
                                             <tr><td>Páginas est.</td><td>${doc.readability?.estimated_pages||'?'}</td></tr>
                                             <tr><td>Leitura</td><td>${doc.readability?.reading_time_min||'?'} min</td></tr>
                                             <tr><td>Referências</td><td>${doc.ref_count||'0'}</td></tr>
                                         </table>
                                         <div style="margin-top:0.5rem;font-size:0.7rem;${visStyle}">${visIcon}${expiryText}</div>
+                                        ${doc.ai_analyzed ? '<div style="margin-top:0.4rem;font-size:0.7rem;color:#10b981">Analisado por IA (Llama 3.3)</div>' : ''}
                                     </div>
                                     ${relHtml}
                                 </div>
@@ -199,7 +260,6 @@ const PageRepository = (() => {
         document.getElementById('repo-clear-btn').addEventListener('click', () => {
             if (confirm('Tem certeza que deseja apagar todos os documentos deste repositório?')) {
                 state.repository = [];
-                NebulaStorage.ensureWorkspace(state, state.current_user).repository = [];
                 NebulaStorage.saveState(state);
                 NebulaApp.navigate('Repositório');
             }

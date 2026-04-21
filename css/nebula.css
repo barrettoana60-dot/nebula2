@@ -408,7 +408,9 @@ h1, h2, h3, h4, h5, h6, .page-title, .section-title, .auth-logo-big {
     to { transform: scale(4); opacity: 0; }
 }
 
-/* ── TUTORIAL OVERLAY ── */
+/* ══════════════════════════════════════
+   ANIMATED TUTORIAL OVERLAY
+   ══════════════════════════════════════ */
 #tutorial-overlay {
     position: fixed;
     top: 0; left: 0; width: 100vw; height: 100vh;
@@ -417,57 +419,238 @@ h1, h2, h3, h4, h5, h6, .page-title, .section-title, .auth-logo-big {
     align-items: center;
     justify-content: center;
 }
+#tutorial-overlay.tutorial-animate-in .tutorial-card {
+    animation: tutCardIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+#tutorial-overlay.tutorial-animate-in .tutorial-backdrop {
+    animation: tutBackdropIn 0.3s ease both;
+}
+#tutorial-overlay.tutorial-animate-out .tutorial-card {
+    animation: tutCardOut 0.3s ease both;
+}
+#tutorial-overlay.tutorial-animate-out .tutorial-backdrop {
+    animation: tutBackdropOut 0.35s ease both;
+}
+@keyframes tutCardIn { from { opacity: 0; transform: translateY(30px) scale(0.95); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes tutCardOut { from { opacity: 1; transform: scale(1); } to { opacity: 0; transform: scale(0.9) translateY(20px); } }
+@keyframes tutBackdropIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes tutBackdropOut { from { opacity: 1; } to { opacity: 0; } }
+
 .tutorial-backdrop {
     position: absolute;
     top: 0; left: 0; width: 100%; height: 100%;
-    background: rgba(0, 0, 0, 0.7);
-    backdrop-filter: blur(5px);
+    background: rgba(0, 0, 0, 0.75);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
 }
 .tutorial-card {
     position: relative;
     background: var(--bg-panel);
     border: 1px solid var(--glass-border);
-    border-radius: 24px;
+    border-radius: 28px;
     padding: 2.5rem;
     width: 90%;
-    max-width: 500px;
-    box-shadow: 0 20px 50px rgba(0,0,0,0.5), 0 0 40px var(--copper-glow);
+    max-width: 520px;
+    box-shadow: 0 25px 60px rgba(0,0,0,0.6), 0 0 50px var(--copper-glow);
     z-index: 10000;
+    overflow: hidden;
 }
+.tutorial-card-animated {
+    transition: transform 0.3s ease;
+}
+
+/* Slide out animations */
+.tutorial-slide-out-left {
+    animation: slideOutLeft 0.28s ease forwards !important;
+}
+.tutorial-slide-out-right {
+    animation: slideOutRight 0.28s ease forwards !important;
+}
+@keyframes slideOutLeft { to { opacity: 0; transform: translateX(-60px) scale(0.95); } }
+@keyframes slideOutRight { to { opacity: 0; transform: translateX(60px) scale(0.95); } }
+
+/* Progress bar */
 .tutorial-progress-bar {
     background: rgba(0,0,0,0.3);
     border-radius: 99px;
     height: 4px;
-    margin-bottom: 1.5rem;
+    margin-bottom: 1rem;
     overflow: hidden;
 }
 .tutorial-progress-fill {
     height: 100%;
     background: linear-gradient(90deg, var(--copper-2), var(--copper-1));
-    transition: width 0.3s ease;
+    transition: width 0.5s cubic-bezier(0.25, 0.8, 0.25, 1);
 }
+
+/* Dot indicators */
+.tutorial-dots {
+    display: flex;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+}
+.tutorial-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.15);
+    transition: all 0.3s ease;
+}
+.tutorial-dot.active {
+    background: var(--copper-1);
+    width: 24px;
+    border-radius: 99px;
+    box-shadow: 0 0 12px rgba(217,119,74,0.4);
+}
+.tutorial-dot.done {
+    background: rgba(217,119,74,0.4);
+}
+
+/* Icon area */
+.tutorial-icon-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 1.5rem;
+}
+.tutorial-icon {
+    width: 64px; height: 64px;
+    color: var(--copper-1);
+    position: relative;
+    z-index: 2;
+    animation: iconBounce 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+    animation-delay: 0.15s;
+}
+.tutorial-icon svg {
+    width: 100%; height: 100%;
+}
+.tutorial-icon-pulse {
+    position: absolute;
+    width: 80px; height: 80px;
+    border-radius: 50%;
+    background: var(--copper-glow);
+    animation: iconPulse 2.5s ease-in-out infinite;
+    z-index: 1;
+}
+@keyframes iconBounce { from { opacity: 0; transform: scale(0.5) translateY(10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+@keyframes iconPulse { 0%, 100% { transform: scale(1); opacity: 0.4; } 50% { transform: scale(1.4); opacity: 0.1; } }
+
+/* Spotlight on highlighted elements */
+@keyframes tutorialSpotlight {
+    0%, 100% { box-shadow: 0 0 20px var(--copper-glow), inset 0 0 20px rgba(217,119,74,0.03); }
+    50% { box-shadow: 0 0 40px rgba(217,119,74,0.3), inset 0 0 30px rgba(217,119,74,0.05); }
+}
+
+/* Text */
 .tutorial-step-count {
-    font-size: 0.8rem;
+    font-size: 0.75rem;
     color: var(--copper-1);
     font-weight: 600;
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.4rem;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.08em;
 }
 .tutorial-title {
-    font-size: 1.5rem;
-    font-weight: 500;
+    font-size: 1.6rem;
+    font-weight: 600;
     color: var(--text-white);
     margin-bottom: 1rem;
+    letter-spacing: -0.01em;
 }
+.tutorial-title-slide {
+    animation: titleSlide 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+    animation-delay: 0.1s;
+}
+@keyframes titleSlide { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
 .tutorial-desc {
     font-size: 1rem;
     color: var(--text-white-80);
-    line-height: 1.6;
+    line-height: 1.7;
     margin-bottom: 2rem;
+    min-height: 3.4em;
+    font-weight: 400;
 }
 .tutorial-actions {
     display: flex;
     justify-content: space-between;
     align-items: center;
+}
+
+/* ══════════════════════════════════════
+   TOAST NOTIFICATION
+   ══════════════════════════════════════ */
+#nebula-toast {
+    position: fixed;
+    top: 1.5rem;
+    right: 1.5rem;
+    z-index: 10001;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.8rem;
+    padding: 1.2rem 1.5rem;
+    background: var(--bg-panel);
+    border: 1px solid rgba(16, 185, 129, 0.25);
+    border-radius: 16px;
+    box-shadow: 0 15px 40px rgba(0,0,0,0.4), 0 0 25px rgba(16, 185, 129, 0.08);
+    max-width: 380px;
+    animation: toastIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+    backdrop-filter: blur(15px);
+    -webkit-backdrop-filter: blur(15px);
+}
+#nebula-toast.toast-exit {
+    animation: toastOut 0.35s ease forwards;
+}
+@keyframes toastIn {
+    from { opacity: 0; transform: translateX(40px) scale(0.95); }
+    to { opacity: 1; transform: translateX(0) scale(1); }
+}
+@keyframes toastOut {
+    from { opacity: 1; transform: translateX(0); }
+    to { opacity: 0; transform: translateX(40px) scale(0.95); }
+}
+.toast-icon {
+    flex-shrink: 0;
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    background: rgba(16, 185, 129, 0.12);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #10b981;
+    animation: toastIconPop 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+    animation-delay: 0.15s;
+}
+@keyframes toastIconPop {
+    from { transform: scale(0); }
+    to { transform: scale(1); }
+}
+.toast-content { flex: 1; }
+.toast-title {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-white);
+    margin-bottom: 0.2rem;
+}
+.toast-message {
+    font-size: 0.8rem;
+    color: var(--text-white-60);
+    line-height: 1.4;
+}
+.toast-close {
+    flex-shrink: 0;
+    background: none;
+    border: none;
+    color: var(--text-white-60);
+    cursor: pointer;
+    padding: 0.2rem;
+    border-radius: 6px;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+}
+.toast-close:hover {
+    color: var(--text-white);
+    background: rgba(255,255,255,0.05);
 }

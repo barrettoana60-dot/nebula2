@@ -36,20 +36,78 @@ const PageProfile = (() => {
             </div>
         `;
 
-        document.getElementById('prof-save-btn').addEventListener('click', () => {
-            state.users[state.current_user].name = document.getElementById('prof-name').value;
-            state.users[state.current_user].research = document.getElementById('prof-research').value;
+        document.getElementById('prof-save-btn').addEventListener('click', async () => {
+            const btn = document.getElementById('prof-save-btn');
+            const newName = document.getElementById('prof-name').value;
+            const newResearch = document.getElementById('prof-research').value;
+            
+            // Visual feedback on button
+            btn.disabled = true;
+            btn.textContent = 'Salvando...';
+            
+            state.users[state.current_user].name = newName;
+            state.users[state.current_user].research = newResearch;
             NebulaStorage.saveState(state);
+            
             // Clear cached articles
             for (const key of Object.keys(state)) { if (key.startsWith('dashboard_articles_') || key.startsWith('conn_articles_')) delete state[key]; }
-            NebulaApp.navigate('Perfil');
+            
+            // Show toast notification
+            showToast('Perfil salvo com sucesso!', 'Suas alterações foram aplicadas e sincronizadas.');
+            
+            // Re-enable button
+            setTimeout(() => {
+                btn.disabled = false;
+                btn.textContent = 'Salvar perfil';
+            }, 600);
         });
 
         document.getElementById('prof-clear-interests')?.addEventListener('click', () => {
             state.user_interest[state.current_user] = {};
             NebulaStorage.saveState(state);
+            showToast('Preferências limpas', 'Seu perfil de recomendações foi reiniciado.');
             NebulaApp.navigate('Perfil');
         });
     }
+
+    /**
+     * Exibe toast notification animado
+     * @param {string} title - Título do toast
+     * @param {string} message - Mensagem detalhada
+     */
+    function showToast(title, message) {
+        // Remove any existing toast
+        const existing = document.getElementById('nebula-toast');
+        if (existing) existing.remove();
+
+        const toast = document.createElement('div');
+        toast.id = 'nebula-toast';
+        toast.innerHTML = `
+            <div class="toast-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="22" height="22">
+                    <polyline points="20 6 9 17 4 12"/>
+                </svg>
+            </div>
+            <div class="toast-content">
+                <div class="toast-title">${title}</div>
+                <div class="toast-message">${message}</div>
+            </div>
+            <button class="toast-close" onclick="this.parentElement.classList.add('toast-exit');setTimeout(()=>this.parentElement.remove(),350)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+            </button>
+        `;
+        document.body.appendChild(toast);
+
+        // Auto-dismiss after 5 seconds
+        setTimeout(() => {
+            if (document.getElementById('nebula-toast')) {
+                toast.classList.add('toast-exit');
+                setTimeout(() => toast.remove(), 350);
+            }
+        }, 5000);
+    }
+
     return { render };
 })();
