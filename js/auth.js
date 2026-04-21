@@ -1,5 +1,5 @@
 /* ============================================================
-   AUTH — SUPABASE + LOCAL FALLBACK INTEGRATION
+   AUTH — LOCAL STORAGE INTEGRATION (Supabase Removed)
    ============================================================ */
 const PageAuth = (() => {
     function render(container, state) {
@@ -64,48 +64,21 @@ const PageAuth = (() => {
             }
 
             errorBox.innerHTML = `<div class="small-muted mt-1">Autenticando...</div>`;
-            
-            // Tenta logar no Supabase primeiro
-            let isSupabaseFailed = false;
-            try {
-                if (window.NebulaSupabase) {
-                    const { data, error } = await window.NebulaSupabase.auth.signInWithPassword({ email, password: pass });
-                    if (error) isSupabaseFailed = true;
-                } else {
-                    isSupabaseFailed = true;
-                }
-            } catch (e) {
-                isSupabaseFailed = true;
-            }
 
-            // Fallback Local se Supabase falhar (Devido a chave incorreta)
-            if (isSupabaseFailed) {
-                console.warn("Supabase Auth failed, using local auth fallback.");
-                if (state.users[email] && state.users[email].pass === pass) {
-                    await NebulaStorage.setEncryptionKey(pass);
-                    state.logged_in = true;
-                    state.current_user = email;
-                    state.page = 'Tela Principal';
-                    NebulaStorage.saveState(state);
-                    NebulaApp.renderApp();
-                    return;
-                } else if (!state.users[email]) {
-                    errorBox.innerHTML = `<div class="error-box mt-1">Conta não encontrada. Tente registrar.</div>`;
-                    return;
-                } else {
-                    errorBox.innerHTML = `<div class="error-box mt-1">Senha incorreta.</div>`;
-                    return;
-                }
+            if (state.users[email] && state.users[email].pass === pass) {
+                await NebulaStorage.setEncryptionKey(pass);
+                state.logged_in = true;
+                state.current_user = email;
+                errorBox.innerHTML = `<div class="small-muted mt-1">Carregando acervo seguro...</div>`;
+                await NebulaStorage.syncWorkspaceStateAsync(state, email);
+                state.page = 'Tela Principal';
+                NebulaStorage.saveState(state);
+                NebulaApp.renderApp();
+            } else if (!state.users[email]) {
+                errorBox.innerHTML = `<div class="error-box mt-1">Conta não encontrada. Tente registrar.</div>`;
+            } else {
+                errorBox.innerHTML = `<div class="error-box mt-1">Senha incorreta.</div>`;
             }
-
-            // Se Supabase deu certo
-            await NebulaStorage.setEncryptionKey(pass);
-            state.logged_in = true;
-            state.current_user = email;
-            errorBox.innerHTML = `<div class="small-muted mt-1">Sincronizando com a nuvem...</div>`;
-            await NebulaStorage.syncWorkspaceStateAsync(state, email);
-            state.page = 'Tela Principal';
-            NebulaApp.renderApp();
         });
 
         document.getElementById('rg-btn').addEventListener('click', async () => {
@@ -122,36 +95,17 @@ const PageAuth = (() => {
 
             errorBox.innerHTML = `<div class="small-muted mt-1">Criando conta...</div>`;
 
-            // Tenta registrar no Supabase primeiro
-            let isSupabaseFailed = false;
-            try {
-                if (window.NebulaSupabase) {
-                    const { data, error } = await window.NebulaSupabase.auth.signUp({ email, password: pass });
-                    if (error) isSupabaseFailed = true;
-                    if (data && data.user) {
-                        await window.NebulaSupabase.from('profiles').update({ name, research }).eq('id', data.user.id);
-                    }
-                } else {
-                    isSupabaseFailed = true;
-                }
-            } catch (e) {
-                isSupabaseFailed = true;
-            }
-
-            // Fallback Local se Supabase falhar
-            if (isSupabaseFailed) {
-                console.warn("Supabase Auth failed, creating local account fallback.");
-                if (state.users[email]) {
-                    errorBox.innerHTML = `<div class="error-box mt-1">E-mail já cadastrado. Tente fazer login.</div>`;
-                    return;
-                }
-                state.users[email] = { name, research, pass, tutorial_completed: false };
-                state.user_interest[email] = {};
-                NebulaStorage.saveState(state);
-                errorBox.innerHTML = `<div class="success-box mt-1">Conta criada localmente com sucesso! Mude para Entrar e acesse.</div>`;
+            if (state.users[email]) {
+                errorBox.innerHTML = `<div class="error-box mt-1">E-mail já cadastrado. Tente fazer login.</div>`;
                 return;
             }
-
+            
+            state.users[email] = { name, research, pass, tutorial_completed: false };
+            state.user_interest[email] = {};
+            if (!state.workspaces) state.workspaces = {};
+            state.workspaces[email] = NebulaStorage.blankWorkspace();
+            
+            NebulaStorage.saveState(state);
             errorBox.innerHTML = `<div class="success-box mt-1">Conta criada com sucesso! Mude para Entrar e acesse sua conta.</div>`;
         });
 

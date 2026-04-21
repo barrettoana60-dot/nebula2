@@ -1,5 +1,5 @@
 /* ============================================================
-   STORAGE ENGINE — SUPABASE + AES-GCM Cryptography
+   STORAGE ENGINE — LOCAL STORAGE + AES-GCM Cryptography
    ============================================================ */
 const NebulaStorage = (() => {
     
@@ -50,9 +50,6 @@ const NebulaStorage = (() => {
         }
     }
 
-    /**
-     * Gera UUID v4 compatível com Supabase
-     */
     function generateUUID() {
         return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
             const r = Math.random() * 16 | 0;
@@ -61,21 +58,26 @@ const NebulaStorage = (() => {
         });
     }
 
-    /**
-     * Verifica se um ID é um UUID v4 válido (compatível com Supabase)
-     */
-    function isValidUUID(id) {
-        if (!id || typeof id !== 'string') return false;
-        return /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
-    }
-
     function blankWorkspace() {
         return { repository: [], search_history: [] };
     }
 
-    // Inicialização síncrona básica para não quebrar a arquitetura do SPA.
-    // O estado real será preenchido via `syncWorkspaceStateAsync`.
     function initState() {
+        try {
+            const saved = localStorage.getItem('nebula_db_v3');
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                parsed.logged_in = false;
+                parsed.current_user = null;
+                if (!parsed.workspaces) parsed.workspaces = {};
+                if (!parsed.users) parsed.users = {};
+                if (!parsed.user_interest) parsed.user_interest = {};
+                return parsed;
+            }
+        } catch (e) {
+            console.error("Failed to load local DB", e);
+        }
+
         return {
             users: {},
             workspaces: {},
@@ -83,32 +85,12 @@ const NebulaStorage = (() => {
             community_messages: [],
             logged_in: false,
             current_user: null,
-            current_uid: null, // Supabase user ID
             page: 'Tela Principal',
             repository: [],
             search_history: [],
         };
     }
 
-    // --- SINCRONIZAÇÃO COM SUPABASE ---
-
-    async function fetchUserProfile(state, email) {
-        const { data, error } = await NebulaSupabase.from('profiles').select('*').eq('email', email).single();
-        if (data) {
-            state.users[email] = { name: data.name, research: data.research, tutorial_completed: data.tutorial_completed };
-            state.user_interest[email] = data.user_interest || {};
-        }
-    }
-
-    async function fetchCommunityMessages(state) {
-        // Pega as últimas 50 mensagens
-        const { data, error } = await NebulaSupabase.from('messages').select('*').order('created_at', { ascending: false }).limit(50);
-        if (data) {
-            state.community_messages = data.reverse();
-        }
-    }
-
-    // Sincroniza (Pull) dados da nuvem para o estado local
     async function syncWorkspaceStateAsync(state, email) {
         if (!email) {
             state.repository = [];
@@ -116,18 +98,9 @@ const NebulaStorage = (() => {
             return;
         }
 
-        const { data: userData } = await NebulaSupabase.auth.getUser();
-        if (!userData.user) return;
-        state.current_uid = userData.user.id;
-
-        await fetchUserProfile(state, email);
-        await fetchCommunityMessages(state);
-
-        // Buscar repositório
-        const { data: docs } = await NebulaSupabase.from('documents').select('*').eq('user_id', state.current_uid);
-        let repo = docs || [];
-
-        // Descriptografar repo
+        const ws = state.workspaces[email] || blankWorkspace();
+        let repo = [...(ws.repository || [])];
+        
         if (sessionKey) {
             for (let doc of repo) {
                 if (doc.text && doc.text.startsWith('ENC::')) doc.text = await decryptText(doc.text);
@@ -135,15 +108,8 @@ const NebulaStorage = (() => {
             }
         }
         
-        // Merge: manter documentos locais que ainda não foram salvos no banco
-        const dbIds = new Set(repo.map(d => d.id));
-        const localOnlyDocs = (state.repository || []).filter(d => d.id && !dbIds.has(d.id));
-        
-        state.repository = [...repo, ...localOnlyDocs];
-
-        // Buscar histórico
-        const { data: history } = await NebulaSupabase.from('search_history').select('*').eq('user_id', state.current_uid).order('created_at', { ascending: true });
-        state.search_history = history || [];
+        state.repository = repo;
+        state.search_history = ws.search_history || [];
     }
 
     function syncWorkspaceState(state, email) {
@@ -152,101 +118,29 @@ const NebulaStorage = (() => {
         });
     }
 
-    // Salva (Push) as alterações
     async function saveStateAsync(state) {
         if (!state.logged_in || !state.current_user) return;
 
-        // --- 1. SALVAMENTO LOCAL (Fonte da Verdade Primária para evitar perda de dados) ---
-        try {
-            localStorage.setItem('nebula_db_v3', JSON.stringify(state));
-        } catch (e) {
-            console.warn('[Storage] Falha ao salvar no localStorage:', e);
+        const email = state.current_user;
+        if (!state.workspaces[email]) state.workspaces[email] = blankWorkspace();
+        
+        const repoClone = JSON.parse(JSON.stringify(state.repository));
+        
+        if (sessionKey) {
+            for (let doc of repoClone) {
+                if (doc.text && !doc.text.startsWith('ENC::')) doc.text = await encryptText(doc.text);
+                if (doc.summary && !doc.summary.startsWith('ENC::')) doc.summary = await encryptText(doc.summary);
+            }
         }
-
-        // --- 2. SALVAMENTO NUVEM (Supabase) ---
-        if (!state.current_uid || !window.NebulaSupabase) return; // Se não tem uid, está no modo local-only
-
-        try {
-            // Atualizar Perfil
-            const user = state.users[state.current_user];
-            if (user) {
-                await NebulaSupabase.from('profiles').update({
-                    name: user.name,
-                    research: user.research,
-                    tutorial_completed: user.tutorial_completed,
-                    user_interest: state.user_interest[state.current_user] || {}
-                }).eq('id', state.current_uid);
-            }
-
-            // Atualizar Repositório
-            if (state.repository && state.repository.length > 0) {
-                const newDocs = [];
-                const existingDocs = [];
-
-                for (const doc of state.repository) {
-                    const dbDoc = { ...doc, user_id: state.current_uid };
-                    
-                    if (dbDoc.text && !dbDoc.text.startsWith('ENC::')) dbDoc.text = await encryptText(dbDoc.text);
-                    if (dbDoc.summary && !dbDoc.summary.startsWith('ENC::')) dbDoc.summary = await encryptText(dbDoc.summary);
-                    
-                    if (isValidUUID(dbDoc.id)) {
-                        existingDocs.push(dbDoc);
-                    } else {
-                        const newId = generateUUID();
-                        dbDoc.id = newId;
-                        doc.id = newId;
-                        newDocs.push(dbDoc);
-                    }
-                }
-                
-                if (newDocs.length > 0) {
-                    const { data, error } = await NebulaSupabase.from('documents').insert(newDocs).select();
-                    if (data) {
-                        data.forEach(dbDoc => {
-                            const localDoc = state.repository.find(d => d.name === dbDoc.name && d.uploaded_at === dbDoc.uploaded_at);
-                            if (localDoc) localDoc.id = dbDoc.id;
-                        });
-                        // Atualizar local com os IDs gerados
-                        localStorage.setItem('nebula_db_v3', JSON.stringify(state));
-                    }
-                }
-                
-                if (existingDocs.length > 0) {
-                    await NebulaSupabase.from('documents').upsert(existingDocs);
-                }
-            }
-
-            // Atualizar Histórico
-            if (state.search_history && state.search_history.length > 0) {
-                const newHistory = state.search_history.filter(h => !h.id).map(h => ({
-                    user_id: state.current_uid,
-                    query: h.query,
-                    intent: h.intent,
-                    topic: h.topic
-                }));
-                if (newHistory.length > 0) {
-                    await NebulaSupabase.from('search_history').insert(newHistory);
-                }
-            }
-
-            // Mensagens
-            const newMessages = state.community_messages.filter(m => !m.id).map(m => ({
-                sender_email: m.sender_email,
-                receiver_email: m.receiver_email,
-                text: m.text,
-                timestamp: m.timestamp,
-                created_at: new Date().toISOString()
-            }));
-            if (newMessages.length > 0) {
-                await NebulaSupabase.from('messages').insert(newMessages);
-            }
-        } catch (err) {
-            console.error('[Storage] Erro ao sincronizar com Supabase (dados salvos localmente):', err);
-        }
+        
+        state.workspaces[email].repository = repoClone;
+        state.workspaces[email].search_history = [...state.search_history];
+        
+        localStorage.setItem('nebula_db_v3', JSON.stringify(state));
     }
 
     function saveState(state) {
-        saveStateAsync(state); 
+        saveStateAsync(state);
     }
 
     return {
@@ -254,7 +148,6 @@ const NebulaStorage = (() => {
         encryptText,
         decryptText,
         generateUUID,
-        isValidUUID,
         blankWorkspace,
         initState,
         saveState,
