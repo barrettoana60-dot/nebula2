@@ -3,18 +3,8 @@
    Análise real de documentos com IA de código aberto
    ============================================================ */
 const NebulaAI = (() => {
-    // Obfuscated key to bypass GitHub secret scanner
-    const getK = () => {
-        const p1 = 'gsk_YbEFM';
-        const p2 = 'ZC72sdVaL4F5xJ';
-        const p3 = 'TWGdyb3FYHlF1a3';
-        const p4 = 'Km6j9n3JBVLCaHXfIe';
-        return p1 + p2 + p3 + p4;
-    };
-
-    const GROQ_API_KEY = getK();
-    const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
-    const MODEL = 'llama-3.3-70b-versatile';
+    const POLLINATIONS_URL = 'https://text.pollinations.ai/openai/';
+    const MODEL = 'openai';
 
     const analysisCache = new Map();
 
@@ -25,8 +15,7 @@ const NebulaAI = (() => {
         if (analysisCache.has(cacheKey)) {
             return analysisCache.get(cacheKey);
         }
-
-        const truncatedText = text.slice(0, 6000);
+        const truncatedText = text.slice(0, 12000);
 
         const systemPrompt = `Você é um bibliotecário digital especialista em catalogação de documentos acadêmicos e científicos. 
 Sua principal tarefa é ler o texto do documento fornecido e extrair as informações reais.
@@ -56,11 +45,10 @@ REGRAS:
         const userPrompt = `Arquivo: "${fileName}" (Tipo: ${fileKind})\n\nTexto extraído do documento (leia atentamente para extrair o AUTOR e RESUMO):\n---\n${truncatedText}\n---\n\nAnalise detalhadamente e retorne o JSON.`;
 
         try {
-            const response = await fetch(GROQ_URL, {
+            const response = await fetch(POLLINATIONS_URL, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${GROQ_API_KEY}`
+                    'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
                     model: MODEL,
@@ -69,8 +57,7 @@ REGRAS:
                         { role: 'user', content: userPrompt }
                     ],
                     temperature: 0.1,
-                    max_tokens: 1200,
-                    response_format: { type: 'json_object' }
+                    jsonMode: true
                 })
             });
 
@@ -162,11 +149,10 @@ REGRAS:
         const userPrompt = `Analise este acervo do pesquisador:\n\n${truncatedSummary}\n\nForneça o diagnóstico em JSON.`;
 
         try {
-            const response = await fetch(GROQ_URL, {
+            const response = await fetch(POLLINATIONS_URL, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${GROQ_API_KEY}`
+                    'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
                     model: MODEL,
@@ -175,8 +161,7 @@ REGRAS:
                         { role: 'user', content: userPrompt }
                     ],
                     temperature: 0.3,
-                    max_tokens: 1000,
-                    response_format: { type: 'json_object' }
+                    jsonMode: true
                 })
             });
 

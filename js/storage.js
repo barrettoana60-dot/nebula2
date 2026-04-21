@@ -136,7 +136,15 @@ const NebulaStorage = (() => {
         state.workspaces[email].repository = repoClone;
         state.workspaces[email].search_history = [...state.search_history];
         
-        localStorage.setItem('nebula_db_v3', JSON.stringify(state));
+        const stateToSave = { ...state };
+        delete stateToSave.repository;
+        delete stateToSave.search_history;
+        
+        try {
+            localStorage.setItem('nebula_db_v3', JSON.stringify(stateToSave));
+        } catch(e) {
+            console.error('Storage limit exceeded:', e);
+        }
     }
 
     function saveState(state) {

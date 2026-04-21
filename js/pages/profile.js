@@ -53,7 +53,7 @@ const PageProfile = (() => {
             for (const key of Object.keys(state)) { if (key.startsWith('dashboard_articles_') || key.startsWith('conn_articles_')) delete state[key]; }
             
             // Show toast notification
-            showToast('Perfil salvo com sucesso!', 'Suas alterações foram aplicadas e sincronizadas.');
+            showToast('Aviso de Atualização', 'Seu perfil e suas alterações foram salvas com sucesso!');
             
             // Re-enable button
             setTimeout(() => {
