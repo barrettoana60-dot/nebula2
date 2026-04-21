@@ -105,7 +105,7 @@ const PageAuth = (() => {
             if (!state.workspaces) state.workspaces = {};
             state.workspaces[email] = NebulaStorage.blankWorkspace();
             
-            NebulaStorage.saveState(state);
+            await NebulaStorage.saveStateAsync(state);
             errorBox.innerHTML = `<div class="success-box mt-1">Conta criada com sucesso! Mude para Entrar e acesse sua conta.</div>`;
         });
 

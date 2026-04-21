@@ -1,5 +1,5 @@
 /* ============================================================
-   STORAGE ENGINE — LOCAL STORAGE (Reliable, No Encryption)
+   STORAGE ENGINE — SUPABASE INTEGRATION
    ============================================================ */
 const NebulaStorage = (() => {
 
@@ -16,49 +16,7 @@ const NebulaStorage = (() => {
     }
 
     function initState() {
-        try {
-            const saved = localStorage.getItem('nebula_db_v4');
-            if (saved) {
-                const parsed = JSON.parse(saved);
-                parsed.logged_in = false;
-                parsed.current_user = null;
-                if (!parsed.workspaces) parsed.workspaces = {};
-                if (!parsed.users) parsed.users = {};
-                if (!parsed.user_interest) parsed.user_interest = {};
-                parsed.repository = [];
-                parsed.search_history = [];
-                return parsed;
-            }
-            // Try migrating from v3
-            const oldSaved = localStorage.getItem('nebula_db_v3');
-            if (oldSaved) {
-                const parsed = JSON.parse(oldSaved);
-                parsed.logged_in = false;
-                parsed.current_user = null;
-                if (!parsed.workspaces) parsed.workspaces = {};
-                if (!parsed.users) parsed.users = {};
-                if (!parsed.user_interest) parsed.user_interest = {};
-                parsed.repository = [];
-                parsed.search_history = [];
-                // Clean encrypted data that can't be decrypted
-                for (const email of Object.keys(parsed.workspaces)) {
-                    const ws = parsed.workspaces[email];
-                    if (ws && ws.repository) {
-                        ws.repository = ws.repository.map(doc => {
-                            if (doc.text && doc.text.startsWith('ENC::')) doc.text = '';
-                            if (doc.summary && doc.summary.startsWith('ENC::')) doc.summary = '(resumo criptografado)';
-                            return doc;
-                        });
-                    }
-                }
-                localStorage.setItem('nebula_db_v4', JSON.stringify(parsed));
-                return parsed;
-            }
-        } catch (e) {
-            console.error("Failed to load local DB", e);
-        }
-
-        return {
+        let parsed = {
             users: {},
             workspaces: {},
             user_interest: {},
@@ -69,11 +27,23 @@ const NebulaStorage = (() => {
             repository: [],
             search_history: [],
         };
+        try {
+            const saved = localStorage.getItem('nebula_db_v5');
+            if (saved) {
+                const s = JSON.parse(saved);
+                parsed = { ...parsed, ...s };
+                parsed.logged_in = false;
+                parsed.current_user = null;
+                parsed.repository = [];
+                parsed.search_history = [];
+            }
+        } catch (e) {
+            console.error("Local load fail", e);
+        }
+        return parsed;
     }
 
-    async function setEncryptionKey(password) {
-        // No-op: encryption removed for reliability
-    }
+    async function setEncryptionKey(password) {}
 
     async function syncWorkspaceStateAsync(state, email) {
         if (!email) {
@@ -81,13 +51,47 @@ const NebulaStorage = (() => {
             state.search_history = [];
             return;
         }
+
+        // Pull from Supabase
+        if (window.NebulaSupabase) {
+            try {
+                // Fetch profiles (for community)
+                const { data: profiles } = await window.NebulaSupabase.from('profiles').select('*');
+                if (profiles) {
+                    state.users = {};
+                    state.user_interest = {};
+                    profiles.forEach(p => {
+                        state.users[p.email] = {
+                            name: p.name,
+                            research: p.research,
+                            pass: p.pass,
+                            tutorial_completed: p.tutorial_completed
+                        };
+                        state.user_interest[p.email] = p.interest || {};
+                    });
+                }
+
+                // Fetch workspace
+                const { data: wsData } = await window.NebulaSupabase.from('workspaces').select('*').eq('email', email).single();
+                if (wsData) {
+                    state.workspaces[email] = {
+                        repository: wsData.repository || [],
+                        search_history: wsData.search_history || []
+                    };
+                } else {
+                    state.workspaces[email] = blankWorkspace();
+                }
+            } catch (err) {
+                console.error("Supabase sync failed, using local cache:", err);
+            }
+        }
+
         const ws = state.workspaces[email] || blankWorkspace();
         state.repository = JSON.parse(JSON.stringify(ws.repository || []));
         state.search_history = [...(ws.search_history || [])];
     }
 
     function syncWorkspaceState(state, email) {
-        // Synchronous version — no double render
         if (!email) {
             state.repository = [];
             state.search_history = [];
@@ -105,11 +109,10 @@ const NebulaStorage = (() => {
                 if (!state.workspaces) state.workspaces = {};
                 if (!state.workspaces[email]) state.workspaces[email] = blankWorkspace();
 
-                // Trim text to reduce storage: max 4000 chars per doc
                 const repoToSave = (state.repository || []).map(doc => {
                     const clone = { ...doc };
-                    if (clone.text && clone.text.length > 4000) {
-                        clone.text = clone.text.slice(0, 4000);
+                    if (clone.text && clone.text.length > 2000) {
+                        clone.text = clone.text.slice(0, 2000);
                     }
                     return clone;
                 });
@@ -118,51 +121,51 @@ const NebulaStorage = (() => {
                 state.workspaces[email].search_history = [...(state.search_history || [])];
             }
 
-            // Save everything, excluding transient fields
             const toSave = {};
             for (const key of Object.keys(state)) {
                 if (key === 'repository' || key === 'search_history') continue;
                 toSave[key] = state[key];
             }
+            localStorage.setItem('nebula_db_v5', JSON.stringify(toSave));
+            console.log('[Storage] Local cache saved');
 
-            const json = JSON.stringify(toSave);
-            localStorage.setItem('nebula_db_v4', json);
-            console.log('[Storage] State saved, size:', Math.round(json.length / 1024), 'KB');
         } catch (e) {
-            console.error('[Storage] Save failed:', e);
-            // If quota exceeded, try to save just users (critical data)
-            try {
-                const minimal = {
-                    users: state.users,
-                    workspaces: {},
-                    user_interest: state.user_interest || {},
-                    community_messages: [],
-                    logged_in: state.logged_in,
-                    current_user: state.current_user,
-                    page: state.page
-                };
-                // Save workspaces but trim document text aggressively
-                for (const email of Object.keys(state.workspaces || {})) {
-                    const ws = state.workspaces[email];
-                    minimal.workspaces[email] = {
-                        repository: (ws.repository || []).map(d => ({
-                            ...d,
-                            text: (d.text || '').slice(0, 500),
-                            ref_samples: []
-                        })),
-                        search_history: (ws.search_history || []).slice(-10)
-                    };
-                }
-                localStorage.setItem('nebula_db_v4', JSON.stringify(minimal));
-                console.warn('[Storage] Saved with reduced data due to quota limits');
-            } catch (e2) {
-                console.error('[Storage] Critical: even minimal save failed:', e2);
-            }
+            console.error('[Storage] Local Save failed:', e);
         }
     }
 
     async function saveStateAsync(state) {
-        saveState(state);
+        saveState(state); // save locally first
+        
+        if (state.current_user && window.NebulaSupabase) {
+            const email = state.current_user;
+            const user = state.users[email];
+            if (!user) return;
+            
+            try {
+                // Upsert Profile
+                await window.NebulaSupabase.from('profiles').upsert({
+                    email: email,
+                    name: user.name,
+                    research: user.research,
+                    pass: user.pass,
+                    tutorial_completed: user.tutorial_completed || false,
+                    interest: state.user_interest[email] || {}
+                });
+
+                // Upsert Workspace
+                const ws = state.workspaces[email] || blankWorkspace();
+                await window.NebulaSupabase.from('workspaces').upsert({
+                    email: email,
+                    repository: ws.repository || [],
+                    search_history: ws.search_history || []
+                });
+                
+                console.log("[Supabase] Data synced to cloud.");
+            } catch (err) {
+                console.error("[Supabase] Sync failed:", err);
+            }
+        }
     }
 
     return {

@@ -14,8 +14,8 @@ const PageDashboard = (() => {
         `;
 
         // Metrics
-        const topicsCount = new Set(docs.map(d => d.topic).filter(Boolean)).size;
-        const dominantLanguage = TextEngine.safeTopValue(docs.map(d => d.language));
+        const topicsCount = docs.length ? new Set(docs.map(d => d.topic).filter(Boolean)).size : 0;
+        const dominantLanguage = docs.length ? TextEngine.safeTopValue(docs.map(d => d.language)) : 'Nenhum';
         html += `
             <div class="metric-grid">
                 <div class="metric-card blue">

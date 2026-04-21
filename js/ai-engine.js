@@ -4,7 +4,7 @@
    ============================================================ */
 const NebulaAI = (() => {
     const POLLINATIONS_URL = 'https://text.pollinations.ai/openai/';
-    const MODEL = 'openai';
+    const MODEL = 'llama';
 
     const analysisCache = new Map();
 
@@ -56,8 +56,7 @@ REGRAS:
                         { role: 'system', content: systemPrompt },
                         { role: 'user', content: userPrompt }
                     ],
-                    temperature: 0.1,
-                    jsonMode: true
+                    temperature: 0.1
                 })
             });
 
@@ -160,8 +159,7 @@ REGRAS:
                         { role: 'system', content: systemPrompt },
                         { role: 'user', content: userPrompt }
                     ],
-                    temperature: 0.3,
-                    jsonMode: true
+                    temperature: 0.3
                 })
             });
 

@@ -22,6 +22,7 @@ const PageProfile = (() => {
                         <div class="input-group"><label class="input-label">Nome</label><input type="text" class="input" id="prof-name" value="${user.name||''}"></div>
                         <div class="input-group"><label class="input-label">Área de pesquisa</label><textarea class="textarea" id="prof-research" placeholder="Descreva sua linha de pesquisa principal...">${user.research||''}</textarea></div>
                         <button class="btn btn-primary btn-full" id="prof-save-btn">Salvar perfil</button>
+                        <div id="prof-feedback" style="margin-top:1rem;text-align:center;font-weight:600;color:#10b981;display:none;"></div>
                     </div>
                 </div>
                 <div>
@@ -54,6 +55,10 @@ const PageProfile = (() => {
             
             // Show toast notification
             showToast('Aviso de Atualização', 'Seu perfil e suas alterações foram salvas com sucesso!');
+            
+            const feedback = document.getElementById('prof-feedback');
+            feedback.style.display = 'block';
+            feedback.textContent = 'Parabéns, seu perfil foi alterado!';
             
             // Re-enable button
             setTimeout(() => {
