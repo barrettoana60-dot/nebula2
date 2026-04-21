@@ -149,7 +149,7 @@ const PageDashboard = (() => {
 
         const cacheKey = `dashboard_articles_${q.slice(0, 20)}`;
         if (state[cacheKey]) {
-            renderRecommendations(recContainer, state[cacheKey], research, docs);
+            renderRecommendations(recContainer, state[cacheKey], research, docs, state);
         } else {
             Promise.all([
                 SearchEngine.searchSemanticScholar(q, 6),
@@ -158,17 +158,26 @@ const PageDashboard = (() => {
                 let arts = ss;
                 if (arts.length < 4) arts = arts.concat(cr);
                 state[cacheKey] = arts;
-                renderRecommendations(recContainer, arts, research, docs);
+                renderRecommendations(recContainer, arts, research, docs, state);
+            }).catch(err => {
+                console.error("Erro na busca de recomendação:", err);
+                recContainer.innerHTML = `<div class="small-muted">Erro ao buscar recomendações na internet.</div>`;
             });
         }
     }
 
-    function renderRecommendations(container, articles, research, docs) {
+    function renderRecommendations(container, articles, research, docs, state) {
         if (!articles || !articles.length) {
             container.innerHTML = `<div class="small-muted">Não consegui recuperar artigos agora, mas a consulta já foi montada.</div>`;
             return;
         }
-        const profileTerms = NebulaApp.recommendTerms(state.current_user, 15);
+        
+        let profileTerms = [];
+        try {
+            profileTerms = NebulaApp.recommendTerms(state.current_user, 15);
+        } catch (e) {
+            console.error("Erro ao puxar profile terms", e);
+        }
         
         let html = '';
         articles.slice(0, 6).forEach(art => {
