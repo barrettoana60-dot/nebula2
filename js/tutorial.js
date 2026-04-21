@@ -128,7 +128,7 @@ const NebulaTutorial = (() => {
 
         const state = NebulaApp.getState();
         if (state.current_user && state.users[state.current_user]) {
-            state.users[state.current_user].tutorial_completed = true;
+            state.users[state.current_user].tutorial_completed = 'v2';
             if (NebulaStorage.saveStateAsync) {
                 NebulaStorage.saveStateAsync(state);
             } else {
@@ -139,7 +139,7 @@ const NebulaTutorial = (() => {
 
     function shouldShow(state) {
         if (!state.current_user || !state.users[state.current_user]) return false;
-        return !state.users[state.current_user].tutorial_completed;
+        return state.users[state.current_user].tutorial_completed !== 'v2';
     }
 
     return { start, shouldShow };

@@ -166,7 +166,7 @@ const NetworkEngine = (() => {
     }
 
     function repositorySignature(state, email) {
-        const docs = NebulaStorage.ensureWorkspace(state, email).repository;
+        const docs = (state.workspaces[email] || {}).repository || [];
         const topicC = {}, kwC = {}, authorC = {}, yearC = {};
         docs.forEach(doc => {
             if (doc.topic) topicC[doc.topic] = (topicC[doc.topic] || 0) + 1;
@@ -176,8 +176,8 @@ const NetworkEngine = (() => {
     }
 
     function compareRepositories(state, baseEmail, otherEmail) {
-        const baseDocs = NebulaStorage.ensureWorkspace(state, baseEmail).repository;
-        const otherDocs = NebulaStorage.ensureWorkspace(state, otherEmail).repository;
+        const baseDocs = (state.workspaces[baseEmail] || {}).repository || [];
+        const otherDocs = (state.workspaces[otherEmail] || {}).repository || [];
         if (!baseDocs.length || !otherDocs.length) return null;
         
         let sim = 0;
