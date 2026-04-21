@@ -1,25 +1,18 @@
 /* ============================================================
-   AUTH — SUPABASE INTEGRATION
+   AUTH — SUPABASE + LOCAL FALLBACK INTEGRATION
    ============================================================ */
 const PageAuth = (() => {
     function render(container, state) {
         container.innerHTML = `
             <div class="hero-container">
                 <div class="hero-content">
-                    
                     <h1 class="hero-title">NEBULA RESEARCH</h1>
-
-                    <!-- Lado Direito: Caixa de Login/Registro no estilo Glass + Dark -->
                     <div class="glass-outer hero-auth-box">
-                        
                         <div class="tabs-bar">
                             <button class="tab-btn active" id="auth-tab-login" onclick="PageAuth.switchTab('login')">Entrar</button>
                             <button class="tab-btn" id="auth-tab-register" onclick="PageAuth.switchTab('register')">Criar conta</button>
                         </div>
-
-                        <!-- Painel sólido escuro interno -->
                         <div class="hero-inner-panel">
-                            
                             <div class="tab-content active" id="auth-login-form">
                                 <div class="section-title" style="margin-bottom:1.5rem; border:none; padding:0;">Acesse seu acervo seguro</div>
                                 <div class="input-group">
@@ -33,7 +26,6 @@ const PageAuth = (() => {
                                 <button class="btn btn-primary btn-full mb-1" id="li-btn">ACESSAR PLATAFORMA</button>
                                 <div id="li-error"></div>
                             </div>
-
                             <div class="tab-content" id="auth-register-form">
                                 <div class="section-title" style="margin-bottom:1.5rem; border:none; padding:0;">Crie seu cofre de pesquisa</div>
                                 <div class="input-group">
@@ -55,50 +47,67 @@ const PageAuth = (() => {
                                 <button class="btn btn-primary btn-full mb-1" id="rg-btn">CONFIRMAR CADASTRO</button>
                                 <div id="rg-error"></div>
                             </div>
-
-                        </div> <!-- end hero-inner-panel -->
-
-                    </div> <!-- end glass-outer -->
-                    
+                        </div>
+                    </div>
                 </div>
             </div>
         `;
 
-        // Login handler (Supabase)
         document.getElementById('li-btn').addEventListener('click', async () => {
             const email = document.getElementById('li-email').value.trim();
             const pass = document.getElementById('li-pass').value;
             const errorBox = document.getElementById('li-error');
             
+            if (!email || !pass) {
+                errorBox.innerHTML = `<div class="error-box mt-1">Preencha e-mail e senha.</div>`;
+                return;
+            }
+
             errorBox.innerHTML = `<div class="small-muted mt-1">Autenticando...</div>`;
             
+            // Tenta logar no Supabase primeiro
+            let isSupabaseFailed = false;
             try {
-                const { data, error } = await NebulaSupabase.auth.signInWithPassword({
-                    email: email,
-                    password: pass
-                });
-
-                if (error) {
-                    errorBox.innerHTML = `<div class="error-box mt-1">Falha no login: ${error.message}</div>`;
+                if (window.NebulaSupabase) {
+                    const { data, error } = await window.NebulaSupabase.auth.signInWithPassword({ email, password: pass });
+                    if (error) isSupabaseFailed = true;
                 } else {
-                    // Configura a chave de criptografia baseada na senha para decodificar AES
+                    isSupabaseFailed = true;
+                }
+            } catch (e) {
+                isSupabaseFailed = true;
+            }
+
+            // Fallback Local se Supabase falhar (Devido a chave incorreta)
+            if (isSupabaseFailed) {
+                console.warn("Supabase Auth failed, using local auth fallback.");
+                if (state.users[email] && state.users[email].pass === pass) {
                     await NebulaStorage.setEncryptionKey(pass);
                     state.logged_in = true;
                     state.current_user = email;
-                    
-                    errorBox.innerHTML = `<div class="small-muted mt-1">Sincronizando com a nuvem...</div>`;
-                    
-                    await NebulaStorage.syncWorkspaceStateAsync(state, email);
                     state.page = 'Tela Principal';
+                    NebulaStorage.saveState(state);
                     NebulaApp.renderApp();
+                    return;
+                } else if (!state.users[email]) {
+                    errorBox.innerHTML = `<div class="error-box mt-1">Conta não encontrada. Tente registrar.</div>`;
+                    return;
+                } else {
+                    errorBox.innerHTML = `<div class="error-box mt-1">Senha incorreta.</div>`;
+                    return;
                 }
-            } catch (err) {
-                console.error(err);
-                errorBox.innerHTML = `<div class="error-box mt-1">Erro crítico: ${err.message || 'Falha na conexão com o banco.'}</div>`;
             }
+
+            // Se Supabase deu certo
+            await NebulaStorage.setEncryptionKey(pass);
+            state.logged_in = true;
+            state.current_user = email;
+            errorBox.innerHTML = `<div class="small-muted mt-1">Sincronizando com a nuvem...</div>`;
+            await NebulaStorage.syncWorkspaceStateAsync(state, email);
+            state.page = 'Tela Principal';
+            NebulaApp.renderApp();
         });
 
-        // Register handler (Supabase)
         document.getElementById('rg-btn').addEventListener('click', async () => {
             const name = document.getElementById('rg-name').value.trim();
             const email = document.getElementById('rg-email').value.trim();
@@ -113,34 +122,39 @@ const PageAuth = (() => {
 
             errorBox.innerHTML = `<div class="small-muted mt-1">Criando conta...</div>`;
 
+            // Tenta registrar no Supabase primeiro
+            let isSupabaseFailed = false;
             try {
-                // Supabase auth
-                const { data, error } = await NebulaSupabase.auth.signUp({
-                    email: email,
-                    password: pass
-                });
+                if (window.NebulaSupabase) {
+                    const { data, error } = await window.NebulaSupabase.auth.signUp({ email, password: pass });
+                    if (error) isSupabaseFailed = true;
+                    if (data && data.user) {
+                        await window.NebulaSupabase.from('profiles').update({ name, research }).eq('id', data.user.id);
+                    }
+                } else {
+                    isSupabaseFailed = true;
+                }
+            } catch (e) {
+                isSupabaseFailed = true;
+            }
 
-                if (error) {
-                    errorBox.innerHTML = `<div class="error-box mt-1">Erro: ${error.message}</div>`;
+            // Fallback Local se Supabase falhar
+            if (isSupabaseFailed) {
+                console.warn("Supabase Auth failed, creating local account fallback.");
+                if (state.users[email]) {
+                    errorBox.innerHTML = `<div class="error-box mt-1">E-mail já cadastrado. Tente fazer login.</div>`;
                     return;
                 }
-
-                // O Profile vai ser criado por um Trigger no SQL. Mas precisamos dar Update com os dados reais.
-                if (data && data.user) {
-                    await NebulaSupabase.from('profiles').update({
-                        name: name,
-                        research: research
-                    }).eq('id', data.user.id);
-                }
-
-                errorBox.innerHTML = `<div class="success-box mt-1">Conta criada com sucesso! Mude para Entrar e acesse sua conta.</div>`;
-            } catch (err) {
-                console.error(err);
-                errorBox.innerHTML = `<div class="error-box mt-1">Erro crítico de rede ou chaves: ${err.message}</div>`;
+                state.users[email] = { name, research, pass, tutorial_completed: false };
+                state.user_interest[email] = {};
+                NebulaStorage.saveState(state);
+                errorBox.innerHTML = `<div class="success-box mt-1">Conta criada localmente com sucesso! Mude para Entrar e acesse.</div>`;
+                return;
             }
+
+            errorBox.innerHTML = `<div class="success-box mt-1">Conta criada com sucesso! Mude para Entrar e acesse sua conta.</div>`;
         });
 
-        // Enter key listeners
         document.getElementById('li-pass').addEventListener('keydown', (e) => { if (e.key === 'Enter') document.getElementById('li-btn').click(); });
         document.getElementById('li-email').addEventListener('keydown', (e) => { if (e.key === 'Enter') document.getElementById('li-pass').focus(); });
     }
