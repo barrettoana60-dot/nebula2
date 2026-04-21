@@ -33,7 +33,7 @@ const NebulaApp = (() => {
 
     function renderNavbar() {
         const user = state.users[state.current_user] || {};
-        const pages = ['Dashboard', 'Pesquisa Inteligente', 'Repositório', 'Análise', 'Conexões', 'Comunidade', 'Perfil'];
+        const pages = ['Tela Principal', 'Pesquisa Inteligente', 'Repositório', 'Análise', 'Conexões', 'Comunidade', 'Perfil'];
         const navLinks = document.getElementById('navLinks');
         navLinks.innerHTML = pages.map(p =>
             `<button class="nav-link ${state.page === p ? 'active' : ''}" onclick="NebulaApp.navigate('${p}')">${p}</button>`
@@ -47,7 +47,7 @@ const NebulaApp = (() => {
         window.scrollTo(0, 0);
 
         switch (state.page) {
-            case 'Dashboard': PageDashboard.render(container, state); break;
+            case 'Tela Principal': PageDashboard.render(container, state); break;
             case 'Pesquisa Inteligente': PageSearch.render(container, state); break;
             case 'Repositório': PageRepository.render(container, state); break;
             case 'Análise': PageAnalysis.render(container, state); break;

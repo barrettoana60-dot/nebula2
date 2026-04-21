@@ -151,18 +151,42 @@ const PageSearch = (() => {
             </div>
         `;
 
-        // Image Search Info
+        // Image Search Contextual Info
         if (imageFile) {
-            const imgMeta = await DocumentEngine.analyzeImage(imageFile);
+            const fileNameLower = imageFile.name.toLowerCase();
+            const localMatches = state.repository.filter(d => 
+                (d.text && d.text.toLowerCase().includes(fileNameLower.split('.')[0])) || 
+                (d.name && d.name.toLowerCase().includes(fileNameLower.split('.')[0]))
+            );
+            
+            let localText = `<div class="small-muted">Nenhum vínculo imediato dessa imagem com seus documentos armazenados.</div>`;
+            if (localMatches.length > 0) {
+                localText = `<div style="color:var(--copper-1); font-weight:500;">Esta imagem pode estar relacionada a ${localMatches.length} documento(s) do seu cofre (ex: ${localMatches[0].name}).</div>`;
+            }
+
+            const encName = encodeURIComponent(imageFile.name.split('.')[0]);
+
             html += `
                 <div class="glass">
-                    <div class="section-title">Análise visual da imagem enviada</div>
-                    <div class="metric-grid mb-1">
-                        <div class="metric-card blue"><div class="metric-label">Largura</div><div class="metric-value">${imgMeta.width || '?'}px</div></div>
-                        <div class="metric-card cyan"><div class="metric-label">Altura</div><div class="metric-value">${imgMeta.height || '?'}px</div></div>
-                        <div class="metric-card green"><div class="metric-label">Brilho</div><div class="metric-value">${imgMeta.brightness || '?'}</div></div>
+                    <div class="section-title">Contexto e Busca Reversa da Imagem</div>
+                    <div class="grid-60-40">
+                        <div>
+                            <p class="small-muted mb-1" style="font-size:0.85rem;">
+                                O sistema procurou por conexões textuais e metadados atrelados ao arquivo <b>${imageFile.name}</b> dentro do seu repositório local.
+                            </p>
+                            <div class="mb-1">${localText}</div>
+                            
+                            <div class="notice-box">
+                                Para analisar o conteúdo exato da foto (ex: "Metrô Rio"), utilize a Busca Reversa oficial do Google Lens.
+                            </div>
+                            
+                            <a href="https://lens.google.com/upload?ep=ccm" target="_blank" class="btn btn-primary btn-sm" style="text-decoration:none;">Abrir Google Lens</a>
+                            <a href="https://www.google.com/search?tbm=isch&q=${encName}" target="_blank" class="btn btn-sm" style="text-decoration:none; margin-left:0.5rem;">Buscar nome no Google</a>
+                        </div>
+                        <div style="text-align:right;">
+                            <img src="${URL.createObjectURL(imageFile)}" style="max-width:100%; max-height:200px; border-radius:14px; border:1px solid rgba(255,255,255,0.1);">
+                        </div>
                     </div>
-                    <img src="${URL.createObjectURL(imageFile)}" style="max-width:100%; border-radius:14px; margin-top:0.5rem;">
                 </div>
             `;
         }

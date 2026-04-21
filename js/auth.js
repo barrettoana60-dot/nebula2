@@ -76,7 +76,7 @@ const PageAuth = (() => {
                 state.current_user = email;
                 if (!state.user_interest[email]) state.user_interest[email] = {};
                 await NebulaStorage.syncWorkspaceStateAsync(state, email);
-                state.page = 'Dashboard';
+                state.page = 'Tela Principal';
                 NebulaApp.renderApp();
             } else {
                 document.getElementById('li-error').innerHTML = `<div class="error-box mt-1">E-mail ou senha inválidos.</div>`;

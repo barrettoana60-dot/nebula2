@@ -3,7 +3,7 @@
    ============================================================ */
 const NebulaTutorial = (() => {
     const STEPS = [
-        { page: 'Dashboard', title: 'Dashboard', desc: 'Aqui você vê um resumo dos seus documentos, temas, conexões e recomendações de artigos baseadas no seu perfil de pesquisa.' },
+        { page: 'Tela Principal', title: 'Tela Principal', desc: 'Aqui você vê um resumo dos seus documentos, temas, conexões e recomendações de artigos baseadas no seu perfil de pesquisa.' },
         { page: 'Pesquisa Inteligente', title: 'Pesquisa Inteligente', desc: 'Busque artigos usando linguagem natural. O sistema analisa sua intenção, cruza com seu repositório local e busca artigos na internet.' },
         { page: 'Repositório', title: 'Repositório', desc: 'Envie PDFs, DOCX e outros documentos. O sistema extrai automaticamente: autor, resumo, palavras-chave, tema, idioma e referências.' },
         { page: 'Análise', title: 'Análise de Dados', desc: 'Visualize dados do seu acervo: mapa global de países, linha do tempo, temas mais frequentes e recomendações do algoritmo de ML.' },

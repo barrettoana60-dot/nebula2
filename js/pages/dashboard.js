@@ -1,5 +1,5 @@
 /* ============================================================
-   PAGE: DASHBOARD
+   PAGE: TELA PRINCIPAL (DASHBOARD)
    ============================================================ */
 const PageDashboard = (() => {
     function render(container, state) {
@@ -10,7 +10,7 @@ const PageDashboard = (() => {
 
         let html = `
             <div class="page-title">Bem-vindo, ${(user.name || '').split(' ')[0] || 'Pesquisador'}</div>
-            <div class="page-sub">${research || 'Configure sua área de pesquisa no Perfil para receber recomendações melhores.'}</div>
+            <div class="page-sub">${research ? `Tema da Pesquisa: <b>${research}</b>` : 'Configure sua área de pesquisa no Perfil para receber recomendações focadas.'}</div>
         `;
 
         // Metrics
@@ -133,8 +133,16 @@ const PageDashboard = (() => {
 
         // Async Recommendations
         const recContainer = document.getElementById('dash-recommendations');
-        const q = SearchEngine.buildRecommendationQuery(research, docs);
-        if (!q.trim()) {
+        
+        // Strict focus on user's research theme if available, otherwise fallback
+        let q = research.trim();
+        if (!q && docs.length > 0) {
+            const topKeywords = [];
+            docs.slice(0, 5).forEach(d => topKeywords.push(...(d.keywords || []).slice(0, 3)));
+            q = [...new Set(topKeywords)].slice(0, 5).join(' ');
+        }
+        
+        if (!q) {
             recContainer.innerHTML = `<div class="small-muted">Adicione uma linha de pesquisa no Perfil ou envie documentos no Repositório para gerar recomendações.</div>`;
             return;
         }
