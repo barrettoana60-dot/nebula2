@@ -377,11 +377,22 @@ h1, h2, h3, h4, h5, h6, .page-title, .section-title, .auth-logo-big {
 @media(max-width: 900px) {
     .grid-2, .grid-60-40 { grid-template-columns: 1fr; }
     .grid-3 { grid-template-columns: 1fr 1fr; }
-    .nav-links { display: none; }
+    .nav-links { overflow-x: auto; white-space: nowrap; max-width: 50vw; padding-bottom: 5px; scrollbar-width: none; }
+    .nav-links::-webkit-scrollbar { display: none; }
 }
 @media(max-width: 600px) {
     .grid-3 { grid-template-columns: 1fr; }
-    .hero-title { font-size: 2.5rem; }
+    .hero-title { font-size: 2.2rem; }
+    .page-container { padding: 0 1rem 4rem; }
+    .nav-shell { flex-direction: column; height: auto; padding: 1rem; border-radius: 16px; margin: 0 1rem 1.5rem; gap: 1rem; }
+    .nav-links { max-width: 100%; width: 100%; justify-content: flex-start; }
+    .nav-right { width: 100%; justify-content: space-between; }
+    .glass, .glass-sm, .glass-outer, .doc-card, .article-card, .metric-card { padding: 1rem; }
+    .metric-value { font-size: 1.8rem; }
+    .tabs-bar { flex-direction: column; }
+    .hero-container { padding: 1rem; }
+    #tutorial-overlay .tutorial-card { padding: 1.5rem; }
+    .tutorial-title { font-size: 1.2rem; }
 }
 
 /* ── RIPPLE EFFECT ── */

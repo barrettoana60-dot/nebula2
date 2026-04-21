@@ -363,11 +363,23 @@ const TextEngine = (() => {
         return scored.slice(0, limit);
     }
 
+    function calculateRealAdherence(profileKeywords, articleText) {
+        if (!profileKeywords || !profileKeywords.length || !articleText) return 0;
+        const textWords = new Set(tokenize(articleText));
+        let matches = 0;
+        profileKeywords.forEach(kw => {
+            if (textWords.has(normalize(kw))) matches++;
+        });
+        // Scale to 100% based on matching at least half of the top keywords
+        let sim = (matches / Math.min(profileKeywords.length, 10)) * 100;
+        return Math.min(Math.round(sim), 99);
+    }
+
     return {
         STOPWORDS, TOPIC_RULES, NATIONALITY_COORDS, COUNTRY_ISO3,
         normalize, tokenize, extractKeywordsTFIDF, summarizeExtractive,
         detectTopic, detectYears, inferNationality, countryToISO3,
-        cosineSimilarity, scoreRelevance,
+        cosineSimilarity, scoreRelevance, calculateRealAdherence,
         extractAuthor, detectLanguage, computeReadability,
         generateContextualSummary, extractReferences,
         recognizeIntent, safeTopValue, counter,

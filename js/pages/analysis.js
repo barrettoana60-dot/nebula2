@@ -1,5 +1,55 @@
 /* PAGE: ANALYSIS */
 const PageAnalysis = (() => {
+    function generateAIReview(docs, authors, topics) {
+        let strengths = [];
+        let weaknesses = [];
+        let suggestions = [];
+        
+        // Diversidade de anos
+        const years = [...new Set(docs.map(d=>d.year).filter(Boolean))];
+        const currentYear = new Date().getFullYear();
+        const recentDocs = docs.filter(d => d.year && d.year >= currentYear - 5);
+        
+        if (recentDocs.length > docs.length * 0.4) {
+            strengths.push('Acervo muito atualizado: boa proporção de artigos dos últimos 5 anos.');
+        } else if (recentDocs.length < docs.length * 0.1) {
+            weaknesses.push('Seu acervo está desatualizado. Poucos artigos recentes (últimos 5 anos).');
+            suggestions.push('Busque no Google Scholar artigos publicados a partir de ' + (currentYear - 3) + ' sobre seus temas principais.');
+        }
+
+        // Diversidade de Autores
+        if (authors.length > docs.length * 0.8) {
+            strengths.push('Excelente diversidade de autores, reduzindo o viés de pesquisa.');
+        } else if (authors.length < docs.length * 0.3) {
+            weaknesses.push('Alta concentração de artigos nos mesmos autores. Risco de viés teórico.');
+            suggestions.push('Procure pesquisadores alternativos que citem os seus autores atuais, mas que tragam perspectivas diferentes.');
+        }
+
+        // Foco Temático
+        const topicCounts = TextEngine.counter(topics);
+        if (topicCounts.length > 0 && topicCounts[0][1] > docs.length * 0.7) {
+            weaknesses.push(`Sua pesquisa está extremamente nichada em "${topicCounts[0][0]}". Faltam conexões interdisciplinares.`);
+            suggestions.push(`Tente buscar artigos cruzando "${topicCounts[0][0]}" com áreas complementares (ex: Tecnologia, Sociedade ou Economia).`);
+        } else if (topicCounts.length > 4) {
+            strengths.push('Pesquisa interdisciplinar: você cruza diversas áreas de conhecimento com sucesso.');
+        }
+
+        // Idiomas
+        const languages = [...new Set(docs.map(d=>d.language).filter(Boolean))];
+        if (languages.length === 1 && languages[0] === 'Português') {
+            weaknesses.push('Limitação regional: todo o seu acervo está em Português.');
+            suggestions.push('Busque publicações internacionais em Inglês ou Espanhol para acessar o estado da arte global do seu tema.');
+        } else if (languages.length > 1) {
+            strengths.push('Acervo multilíngue, proporcionando visão global do tema.');
+        }
+
+        if (strengths.length === 0) strengths.push('Acervo em construção. Continue adicionando documentos.');
+        if (weaknesses.length === 0) weaknesses.push('Nenhuma lacuna crítica detectada.');
+        if (suggestions.length === 0) suggestions.push('Continue enviando PDFs relevantes para manter o algoritmo atualizado.');
+
+        return { strengths, weaknesses, suggestions };
+    }
+
     function render(container, state) {
         const docs = state.repository || [];
         if (!docs.length) {
@@ -7,20 +57,20 @@ const PageAnalysis = (() => {
             return;
         }
         
-        // ML Recomendações
         const highlights = TextEngine.getRecommendations(state, state.current_user, docs, 3);
         const topHighlight = highlights.length ? highlights[0].doc : docs[0];
 
-        // Estatísticas Básicas
         const topics = docs.map(d=>d.topic).filter(Boolean);
         const authors = docs.map(d=>d.author).filter(a=>a&&a!=='Desconhecido');
         const dominantTopic = TextEngine.safeTopValue(topics, 'Nenhum');
         let totalTextBytes = docs.reduce((s,d)=>s+((d.text||'').length * 2), 0);
         let cryptoDataSize = (totalTextBytes / 1024).toFixed(1);
 
+        const aiReview = generateAIReview(docs, authors, topics);
+
         let html = `
-            <div class="page-title">Análise de Dados</div>
-            <div class="page-sub">Insights simplificados e aprendizado de máquina sobre seu acervo</div>
+            <div class="page-title">Análise de Dados Profunda</div>
+            <div class="page-sub">Insights simplificados, aprendizado de máquina e Raio-X do seu acervo</div>
             
             <div class="glass-outer mb-1">
                 <div class="section-title">Resumo do seu Cofre (Criptografado)</div>
@@ -32,7 +82,32 @@ const PageAnalysis = (() => {
                 </div>
             </div>
 
-            <!-- Mapa Global e Linha do Tempo -->
+            <!-- RAIO-X DO ACERVO -->
+            <div class="glass mb-1">
+                <div class="section-title">Raio-X do Acervo (Diagnóstico por IA)</div>
+                <p class="small-muted mb-1">O algoritmo avaliou a saúde e a diversidade da sua pesquisa atual.</p>
+                <div class="grid-3">
+                    <div style="background:rgba(16, 185, 129, 0.05); border:1px solid rgba(16, 185, 129, 0.2); padding:1rem; border-radius:12px;">
+                        <div style="color:#10b981; font-weight:600; margin-bottom:0.5rem">↑ Pontos Fortes</div>
+                        <ul style="padding-left:1.2rem; font-size:0.85rem; color:var(--text-white-80)">
+                            ${aiReview.strengths.map(s => `<li style="margin-bottom:0.4rem">${s}</li>`).join('')}
+                        </ul>
+                    </div>
+                    <div style="background:rgba(239, 68, 68, 0.05); border:1px solid rgba(239, 68, 68, 0.2); padding:1rem; border-radius:12px;">
+                        <div style="color:#fca5a5; font-weight:600; margin-bottom:0.5rem">↓ Lacunas / Pontos Fracos</div>
+                        <ul style="padding-left:1.2rem; font-size:0.85rem; color:var(--text-white-80)">
+                            ${aiReview.weaknesses.map(w => `<li style="margin-bottom:0.4rem">${w}</li>`).join('')}
+                        </ul>
+                    </div>
+                    <div style="background:var(--copper-glow); border:1px solid rgba(217, 119, 74, 0.3); padding:1rem; border-radius:12px;">
+                        <div style="color:var(--copper-1); font-weight:600; margin-bottom:0.5rem">💡 Sugestões de Melhoria</div>
+                        <ul style="padding-left:1.2rem; font-size:0.85rem; color:var(--text-white-80)">
+                            ${aiReview.suggestions.map(s => `<li style="margin-bottom:0.4rem">${s}</li>`).join('')}
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
             <div class="grid-2">
                 <div class="glass">
                     <div class="section-title">Mapa Global de Pesquisa</div>
@@ -40,29 +115,29 @@ const PageAnalysis = (() => {
                     <div id="chart-map"></div>
                 </div>
                 <div class="glass">
-                    <div class="section-title">Evolução Temporal</div>
-                    <p class="small-muted mb-1">Quando os artigos foram publicados.</p>
-                    <div id="chart-timeline"></div>
+                    <div class="section-title">Evolução Temporal Descritiva</div>
+                    <p class="small-muted mb-1">Linha do tempo cronológica com o que ocorreu em cada ano de publicação.</p>
+                    <div id="timeline-container" style="max-height: 400px; overflow-y: auto; padding-right: 1rem;"></div>
                 </div>
             </div>
 
-            <!-- Destaques (ML) e Temas -->
             <div class="grid-2">
                 <div class="glass">
-                    <div class="section-title">Recomendados pelo Algoritmo</div>
-                    <p class="small-muted mb-1">Baseado no que você mais interage.</p>
-                    <div id="ml-highlights" style="display:flex; flex-direction:column; gap:1rem;"></div>
+                    <div class="section-title">Saúde do Repositório (Radar)</div>
+                    <p class="small-muted mb-1">Métricas gerais avaliadas no seu acervo inteiro.</p>
+                    <div id="chart-radar"></div>
                 </div>
                 <div class="glass">
                     <div class="section-title">Assuntos mais discutidos</div>
+                    <p class="small-muted mb-1">A frequência de temas no seu cofre.</p>
                     <div id="chart-topics"></div>
                 </div>
             </div>
-
+            
             <div class="glass">
-                <div class="section-title">Artigos Relacionados (Alta Similaridade)</div>
-                <p class="small-muted mb-1">Documentos que falam exatamente sobre as mesmas coisas.</p>
-                <div id="similarity-list"></div>
+                <div class="section-title">Recomendados pelo Algoritmo</div>
+                <p class="small-muted mb-1">Baseado no aprendizado do seu perfil.</p>
+                <div id="ml-highlights" style="display:flex; flex-direction:column; gap:1rem;"></div>
             </div>
         `;
         container.innerHTML = html;
@@ -76,32 +151,46 @@ const PageAnalysis = (() => {
                     <div style="color:var(--copper-1); font-weight:600; font-size:0.8rem; margin-bottom:0.3rem;">★ MATCH ALTO (${Math.round(h.score*100)}%)</div>
                     <div class="article-title">${doc.name}</div>
                     <div class="article-meta">${doc.author || 'Autor Desconhecido'} • ${doc.topic}</div>
-                    <div class="article-abstract">${(doc.summary || 'Sem resumo disponível').slice(0,100)}...</div>
+                    <div class="article-abstract">${(doc.summary || 'Sem resumo disponível').slice(0,150)}...</div>
                 </div>
             `;
         });
 
-        // Render Similarities
-        const simList = document.getElementById('similarity-list');
-        let simCount = 0;
-        for (let i = 0; i < docs.length; i++) {
-            for (let j = i + 1; j < docs.length; j++) {
-                const sim = TextEngine.cosineSimilarity(docs[i].text || '', docs[j].text || '');
-                if (sim > 0.15) {
-                    simCount++;
-                    simList.innerHTML += `
-                        <div style="padding:1rem; border-bottom:1px solid rgba(255,255,255,0.05);">
-                            <div style="display:flex; justify-content:space-between; align-items:center;">
-                                <div style="flex:1;"><b>${docs[i].name.slice(0,50)}</b></div>
-                                <div style="padding:0 1rem; color:var(--copper-1);">⟷ ${Math.round(sim*100)}%</div>
-                                <div style="flex:1; text-align:right;"><b>${docs[j].name.slice(0,50)}</b></div>
-                            </div>
+        // Render Timeline Descritiva
+        const tlContainer = document.getElementById('timeline-container');
+        const docsByYear = {};
+        docs.forEach(d => {
+            if (d.year) {
+                if (!docsByYear[d.year]) docsByYear[d.year] = [];
+                docsByYear[d.year].push(d);
+            }
+        });
+        
+        const sortedYears = Object.keys(docsByYear).sort((a,b) => b - a); // newest first
+        if (sortedYears.length === 0) {
+            tlContainer.innerHTML = `<div class="small-muted">Nenhum dado de ano disponível nos artigos.</div>`;
+        } else {
+            let tlHtml = `<div style="border-left: 2px solid rgba(255,255,255,0.1); padding-left: 1rem; margin-left: 0.5rem;">`;
+            sortedYears.forEach(year => {
+                tlHtml += `<div style="position:relative; margin-bottom: 1.5rem;">
+                    <div style="position:absolute; left:-1.4rem; top:0; width:10px; height:10px; border-radius:50%; background:var(--copper-1);"></div>
+                    <div style="font-weight:bold; font-size:1.1rem; color:var(--text-white); margin-bottom:0.5rem;">${year}</div>
+                `;
+                docsByYear[year].forEach(d => {
+                    const abs = (d.summary || `Artigo classificado em ${d.topic}.`).slice(0, 100) + '...';
+                    tlHtml += `
+                        <div style="background:rgba(0,0,0,0.2); padding:0.8rem; border-radius:8px; border:1px solid rgba(255,255,255,0.05); margin-bottom:0.5rem;">
+                            <div style="font-size:0.9rem; font-weight:500;">${d.name}</div>
+                            <div style="font-size:0.8rem; color:var(--text-white-60); margin-top:0.2rem;">${abs}</div>
+                            <div style="margin-top:0.4rem;"><span class="tag tag-copper">${d.topic}</span></div>
                         </div>
                     `;
-                }
-            }
+                });
+                tlHtml += `</div>`;
+            });
+            tlHtml += `</div>`;
+            tlContainer.innerHTML = tlHtml;
         }
-        if (simCount === 0) simList.innerHTML = `<div class="small-muted">Nenhum artigo com forte similaridade encontrado no acervo.</div>`;
 
         // Plotly configs
         const plotConfig = {responsive:true, displayModeBar:false};
@@ -118,8 +207,6 @@ const PageAnalysis = (() => {
             const c = d.nationality || TextEngine.inferNationality(d.text || '');
             if (c && c !== 'Desconhecido') countryCounts[c] = (countryCounts[c] || 0) + 1;
         });
-        
-        // Convert country names to ISO-3 codes for Plotly
         const isoCountryCounts = {};
         for (const [name, count] of Object.entries(countryCounts)) {
             const iso = TextEngine.countryToISO3(name);
@@ -154,17 +241,29 @@ const PageAnalysis = (() => {
             }, plotConfig);
         }
 
-
-        // 2. Timeline (Temporal)
-        const yc = TextEngine.counter(docs.map(d=>d.year).filter(Boolean).map(String)).sort((a,b)=>a[0]-b[0]);
-        if (yc.length) {
-            Plotly.newPlot('chart-timeline',[{
-                type:'bar', x:yc.map(e=>e[0]), y:yc.map(e=>e[1]), 
-                marker:{color:'rgba(255,255,255,0.1)', line:{color:'#d9774a', width:2}}
-            }], plotLayout(300), plotConfig);
-        } else {
-            document.getElementById('chart-timeline').innerHTML = `<div class="small-muted" style="margin-top:2rem">Sem dados de ano suficientes.</div>`;
-        }
+        // 2. Radar Chart (Saúde)
+        const radarMetrics = [
+            Math.min(new Set(topics).size * 20, 100), // Diversidade Temática
+            Math.min((docs.filter(d=>d.year && d.year > 2018).length / docs.length) * 150, 100) || 50, // Atualidade
+            Math.min(new Set(authors).size * 15, 100), // Colaboração (Autores únicos)
+            Math.min((totalTextBytes / docs.length) / 5000 * 100, 100) || 50, // Profundidade (Tamanho)
+            Math.min(new Set(docs.map(d=>d.language)).size * 30, 100) || 30 // Diversidade Idioma
+        ];
+        Plotly.newPlot('chart-radar', [{
+            type: 'scatterpolar',
+            r: radarMetrics,
+            theta: ['Temas', 'Atualidade', 'Autores', 'Profundidade', 'Idiomas'],
+            fill: 'toself',
+            fillcolor: 'rgba(217, 119, 74, 0.2)',
+            line: { color: '#d9774a' }
+        }], {
+            polar: {
+                radialaxis: { visible: true, range: [0, 100], color: 'rgba(255,255,255,0.2)', showticklabels: false },
+                angularaxis: { color: 'rgba(255,255,255,0.7)' },
+                bgcolor: 'transparent'
+            },
+            height: 350, margin: {l:40, r:40, t:20, b:20}, paper_bgcolor:'transparent'
+        }, plotConfig);
 
         // 3. Topics (Horizontal Bar)
         const tc = TextEngine.counter(topics).slice(0,6);
@@ -172,7 +271,7 @@ const PageAnalysis = (() => {
             Plotly.newPlot('chart-topics',[{
                 type:'bar', y:tc.map(e=>e[0]), x:tc.map(e=>e[1]), orientation:'h',
                 marker:{color:'rgba(255,255,255,0.8)'}
-            }], {...plotLayout(300), margin:{l:150,r:20,t:20,b:40}}, plotConfig);
+            }], {...plotLayout(350), margin:{l:150,r:20,t:20,b:40}}, plotConfig);
         }
     }
     return {render};

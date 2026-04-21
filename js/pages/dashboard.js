@@ -160,12 +160,18 @@ const PageDashboard = (() => {
             container.innerHTML = `<div class="small-muted">Não consegui recuperar artigos agora, mas a consulta já foi montada.</div>`;
             return;
         }
-        const baseText = research || docs.slice(0, 8).map(d => (d.keywords || []).slice(0, 6).join(' ')).join(' ');
+        const profileTerms = NebulaApp.recommendTerms(state.current_user, 15);
         
         let html = '';
         articles.slice(0, 6).forEach(art => {
             const artText = `${art.title || ''} ${art.abstract || ''}`;
-            const sim = Math.min(Math.round(TextEngine.cosineSimilarity(baseText, artText) * 200 * 10) / 10, 99);
+            
+            // Real algorithmic adherence based on user profile
+            const sim = TextEngine.calculateRealAdherence(profileTerms, artText);
+            
+            // Hide adherence badge if similarity is 0 to avoid UI clutter
+            const badgeHtml = sim > 0 ? `<span class="tag-green">Aderência Real: ${sim}%</span>` : '';
+            
             const titleHtml = art.url ? `<a href="${art.url}" target="_blank">${art.title || 'Sem título'}</a>` : (art.title || 'Sem título');
             html += `
                 <div class="article-card">
@@ -174,7 +180,7 @@ const PageDashboard = (() => {
                     <div class="article-abstract">${(art.abstract || 'Resumo indisponível.').slice(0, 260)}...</div>
                     <div style="margin-top:0.55rem">
                         <span class="tag">${art.topic || 'Pesquisa Geral'}</span>
-                        <span class="tag-green">Aderência: ${sim}%</span>
+                        ${badgeHtml}
                     </div>
                 </div>
             `;
