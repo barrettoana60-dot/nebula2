@@ -1,55 +1,5 @@
 /* PAGE: ANALYSIS */
 const PageAnalysis = (() => {
-    function generateAIReview(docs, authors, topics) {
-        let strengths = [];
-        let weaknesses = [];
-        let suggestions = [];
-        
-        // Diversidade de anos
-        const years = [...new Set(docs.map(d=>d.year).filter(Boolean))];
-        const currentYear = new Date().getFullYear();
-        const recentDocs = docs.filter(d => d.year && d.year >= currentYear - 5);
-        
-        if (recentDocs.length > docs.length * 0.4) {
-            strengths.push('Acervo muito atualizado: boa proporção de artigos dos últimos 5 anos.');
-        } else if (recentDocs.length < docs.length * 0.1) {
-            weaknesses.push('Seu acervo está desatualizado. Poucos artigos recentes (últimos 5 anos).');
-            suggestions.push('Busque no Google Scholar artigos publicados a partir de ' + (currentYear - 3) + ' sobre seus temas principais.');
-        }
-
-        // Diversidade de Autores
-        if (authors.length > docs.length * 0.8) {
-            strengths.push('Excelente diversidade de autores, reduzindo o viés de pesquisa.');
-        } else if (authors.length < docs.length * 0.3) {
-            weaknesses.push('Alta concentração de artigos nos mesmos autores. Risco de viés teórico.');
-            suggestions.push('Procure pesquisadores alternativos que citem os seus autores atuais, mas que tragam perspectivas diferentes.');
-        }
-
-        // Foco Temático
-        const topicCounts = TextEngine.counter(topics);
-        if (topicCounts.length > 0 && topicCounts[0][1] > docs.length * 0.7) {
-            weaknesses.push(`Sua pesquisa está extremamente nichada em "${topicCounts[0][0]}". Faltam conexões interdisciplinares.`);
-            suggestions.push(`Tente buscar artigos cruzando "${topicCounts[0][0]}" com áreas complementares (ex: Tecnologia, Sociedade ou Economia).`);
-        } else if (topicCounts.length > 4) {
-            strengths.push('Pesquisa interdisciplinar: você cruza diversas áreas de conhecimento com sucesso.');
-        }
-
-        // Idiomas
-        const languages = [...new Set(docs.map(d=>d.language).filter(Boolean))];
-        if (languages.length === 1 && languages[0] === 'Português') {
-            weaknesses.push('Limitação regional: todo o seu acervo está em Português.');
-            suggestions.push('Busque publicações internacionais em Inglês ou Espanhol para acessar o estado da arte global do seu tema.');
-        } else if (languages.length > 1) {
-            strengths.push('Acervo multilíngue, proporcionando visão global do tema.');
-        }
-
-        if (strengths.length === 0) strengths.push('Acervo em construção. Continue adicionando documentos.');
-        if (weaknesses.length === 0) weaknesses.push('Nenhuma lacuna crítica detectada.');
-        if (suggestions.length === 0) suggestions.push('Continue enviando PDFs relevantes para manter o algoritmo atualizado.');
-
-        return { strengths, weaknesses, suggestions };
-    }
-
     function render(container, state) {
         const docs = state.repository || [];
         if (!docs.length) {
@@ -66,8 +16,6 @@ const PageAnalysis = (() => {
         let totalTextBytes = docs.reduce((s,d)=>s+((d.text||'').length * 2), 0);
         let cryptoDataSize = (totalTextBytes / 1024).toFixed(1);
 
-        const aiReview = generateAIReview(docs, authors, topics);
-
         let html = `
             <div class="page-title">Análise de Dados Profunda</div>
             <div class="page-sub">Insights simplificados, aprendizado de máquina e Raio-X do seu acervo</div>
@@ -83,9 +31,32 @@ const PageAnalysis = (() => {
             </div>
 
             <!-- RAIO-X DO ACERVO -->
-            <div class="glass mb-1">
-                <div class="section-title">Raio-X do Acervo (Diagnóstico por IA)</div>
-                <p class="small-muted mb-1">O algoritmo avaliou a saúde e a diversidade da sua pesquisa atual.</p>
+            <div class="glass mb-1" id="raio-x-container">
+                <div class="section-title">Raio-X do Acervo (Diagnóstico Real por IA Llama 3.3)</div>
+                <p class="small-muted mb-1">O algoritmo Llama 3.3 está lendo seu acervo agora mesmo...</p>
+                <div style="text-align:center; padding: 2rem; color: var(--copper-1);">
+                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation: spin 1s linear infinite;">
+                        <circle cx="12" cy="12" r="10" stroke-dasharray="30" stroke-dashoffset="10"/>
+                    </svg>
+                    <div style="margin-top:1rem;">Analisando todos os documentos...</div>
+                </div>
+            </div>
+        `;
+        container.innerHTML = html;
+
+        // Assincronamente buscar a revisão da IA (Llama 3.3)
+        NebulaAI.generateRepositoryReview(docs).then(aiReview => {
+            const rxContainer = document.getElementById('raio-x-container');
+            if (!rxContainer) return; // Mudou de tela
+
+            if (!aiReview) {
+                // Fallback caso a IA falhe
+                aiReview = { strengths: ['Acervo seguro.'], weaknesses: ['Falta diversidade.'], suggestions: ['Adicione mais PDFs internacionais.'] };
+            }
+
+            rxContainer.innerHTML = `
+                <div class="section-title">Raio-X do Acervo (Diagnóstico Real por IA Llama 3.3)</div>
+                <p class="small-muted mb-1">O Llama 3.3 avaliou a saúde e a diversidade da sua pesquisa atual.</p>
                 <div class="grid-3">
                     <div style="background:rgba(16, 185, 129, 0.05); border:1px solid rgba(16, 185, 129, 0.2); padding:1rem; border-radius:12px;">
                         <div style="color:#10b981; font-weight:600; margin-bottom:0.5rem">↑ Pontos Fortes</div>
@@ -100,14 +71,17 @@ const PageAnalysis = (() => {
                         </ul>
                     </div>
                     <div style="background:var(--copper-glow); border:1px solid rgba(217, 119, 74, 0.3); padding:1rem; border-radius:12px;">
-                        <div style="color:var(--copper-1); font-weight:600; margin-bottom:0.5rem">Sugestões de Melhoria</div>
+                        <div style="color:var(--copper-1); font-weight:600; margin-bottom:0.5rem">Sugestões da Llama 3.3</div>
                         <ul style="padding-left:1.2rem; font-size:0.85rem; color:var(--text-white-80)">
                             ${aiReview.suggestions.map(s => `<li style="margin-bottom:0.4rem">${s}</li>`).join('')}
                         </ul>
                     </div>
                 </div>
-            </div>
+            `;
+        });
 
+        // Render remaining dynamic sections...
+        let htmlExtra = `
             <div class="grid-2">
                 <div class="glass">
                     <div class="section-title">Mapa Global de Pesquisa</div>

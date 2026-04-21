@@ -152,98 +152,96 @@ const NebulaStorage = (() => {
         });
     }
 
-    // Salva (Push) as alterações no Supabase.
+    // Salva (Push) as alterações
     async function saveStateAsync(state) {
-        if (!state.logged_in || !state.current_user || !state.current_uid) return;
+        if (!state.logged_in || !state.current_user) return;
 
-        // 1. Atualizar Perfil
-        const user = state.users[state.current_user];
-        if (user) {
-            await NebulaSupabase.from('profiles').update({
-                name: user.name,
-                research: user.research,
-                tutorial_completed: user.tutorial_completed,
-                user_interest: state.user_interest[state.current_user] || {}
-            }).eq('id', state.current_uid);
+        // --- 1. SALVAMENTO LOCAL (Fonte da Verdade Primária para evitar perda de dados) ---
+        try {
+            localStorage.setItem('nebula_db_v3', JSON.stringify(state));
+        } catch (e) {
+            console.warn('[Storage] Falha ao salvar no localStorage:', e);
         }
 
-        // 2. Atualizar Repositório
-        if (state.repository && state.repository.length > 0) {
-            const newDocs = [];
-            const existingDocs = [];
+        // --- 2. SALVAMENTO NUVEM (Supabase) ---
+        if (!state.current_uid || !window.NebulaSupabase) return; // Se não tem uid, está no modo local-only
 
-            for (const doc of state.repository) {
-                // Clonar para não alterar o estado visual
-                const dbDoc = { ...doc, user_id: state.current_uid };
-                
-                // Criptografar
-                if (dbDoc.text && !dbDoc.text.startsWith('ENC::')) dbDoc.text = await encryptText(dbDoc.text);
-                if (dbDoc.summary && !dbDoc.summary.startsWith('ENC::')) dbDoc.summary = await encryptText(dbDoc.summary);
-                
-                // Verificar se tem UUID válido
-                if (isValidUUID(dbDoc.id)) {
-                    existingDocs.push(dbDoc);
-                } else {
-                    // Gerar UUID v4 compatível
-                    const newId = generateUUID();
-                    dbDoc.id = newId;
-                    // Atualizar o ID no state local também
-                    doc.id = newId;
-                    newDocs.push(dbDoc);
-                }
+        try {
+            // Atualizar Perfil
+            const user = state.users[state.current_user];
+            if (user) {
+                await NebulaSupabase.from('profiles').update({
+                    name: user.name,
+                    research: user.research,
+                    tutorial_completed: user.tutorial_completed,
+                    user_interest: state.user_interest[state.current_user] || {}
+                }).eq('id', state.current_uid);
             }
-            
-            // Inserir documentos novos
-            if (newDocs.length > 0) {
-                try {
+
+            // Atualizar Repositório
+            if (state.repository && state.repository.length > 0) {
+                const newDocs = [];
+                const existingDocs = [];
+
+                for (const doc of state.repository) {
+                    const dbDoc = { ...doc, user_id: state.current_uid };
+                    
+                    if (dbDoc.text && !dbDoc.text.startsWith('ENC::')) dbDoc.text = await encryptText(dbDoc.text);
+                    if (dbDoc.summary && !dbDoc.summary.startsWith('ENC::')) dbDoc.summary = await encryptText(dbDoc.summary);
+                    
+                    if (isValidUUID(dbDoc.id)) {
+                        existingDocs.push(dbDoc);
+                    } else {
+                        const newId = generateUUID();
+                        dbDoc.id = newId;
+                        doc.id = newId;
+                        newDocs.push(dbDoc);
+                    }
+                }
+                
+                if (newDocs.length > 0) {
                     const { data, error } = await NebulaSupabase.from('documents').insert(newDocs).select();
-                    if (error) {
-                        console.error('[Storage] Insert error:', error);
-                    } else if (data) {
-                        // Atualizar IDs no state local com os retornados pelo banco
+                    if (data) {
                         data.forEach(dbDoc => {
                             const localDoc = state.repository.find(d => d.name === dbDoc.name && d.uploaded_at === dbDoc.uploaded_at);
                             if (localDoc) localDoc.id = dbDoc.id;
                         });
+                        // Atualizar local com os IDs gerados
+                        localStorage.setItem('nebula_db_v3', JSON.stringify(state));
                     }
-                } catch (insertErr) {
-                    console.error('[Storage] Insert exception:', insertErr);
                 }
-            }
-            
-            // Atualizar documentos existentes
-            if (existingDocs.length > 0) {
-                try {
+                
+                if (existingDocs.length > 0) {
                     await NebulaSupabase.from('documents').upsert(existingDocs);
-                } catch (upsertErr) {
-                    console.error('[Storage] Upsert exception:', upsertErr);
                 }
             }
-        }
 
-        // 3. Atualizar Histórico (Inserir novos apenas)
-        if (state.search_history && state.search_history.length > 0) {
-            const newHistory = state.search_history.filter(h => !h.id).map(h => ({
-                user_id: state.current_uid,
-                query: h.query,
-                intent: h.intent,
-                topic: h.topic
-            }));
-            if (newHistory.length > 0) {
-                await NebulaSupabase.from('search_history').insert(newHistory);
+            // Atualizar Histórico
+            if (state.search_history && state.search_history.length > 0) {
+                const newHistory = state.search_history.filter(h => !h.id).map(h => ({
+                    user_id: state.current_uid,
+                    query: h.query,
+                    intent: h.intent,
+                    topic: h.topic
+                }));
+                if (newHistory.length > 0) {
+                    await NebulaSupabase.from('search_history').insert(newHistory);
+                }
             }
-        }
 
-        // 4. Mensagens
-        const newMessages = state.community_messages.filter(m => !m.id).map(m => ({
-            sender_email: m.sender_email,
-            receiver_email: m.receiver_email,
-            text: m.text,
-            timestamp: m.timestamp,
-            created_at: new Date().toISOString()
-        }));
-        if (newMessages.length > 0) {
-            await NebulaSupabase.from('messages').insert(newMessages);
+            // Mensagens
+            const newMessages = state.community_messages.filter(m => !m.id).map(m => ({
+                sender_email: m.sender_email,
+                receiver_email: m.receiver_email,
+                text: m.text,
+                timestamp: m.timestamp,
+                created_at: new Date().toISOString()
+            }));
+            if (newMessages.length > 0) {
+                await NebulaSupabase.from('messages').insert(newMessages);
+            }
+        } catch (err) {
+            console.error('[Storage] Erro ao sincronizar com Supabase (dados salvos localmente):', err);
         }
     }
 
