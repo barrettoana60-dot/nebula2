@@ -1,5 +1,5 @@
 /* ============================================================
-   AUTH — SUPABASE INTEGRATION
+   AUTH — Landing Page Hero em Tela Cheia (Liquid Glass)
    ============================================================ */
 const PageAuth = (() => {
     function render(container, state) {
@@ -45,7 +45,7 @@ const PageAuth = (() => {
                                     <input type="email" class="input" id="rg-email" placeholder="seu@email.com">
                                 </div>
                                 <div class="input-group">
-                                    <label class="input-label">Senha (Mínimo 6 caracteres)</label>
+                                    <label class="input-label">Senha (Usada para criptografia)</label>
                                     <input type="password" class="input" id="rg-pass" placeholder="Crie uma senha forte">
                                 </div>
                                 <div class="input-group">
@@ -64,70 +64,45 @@ const PageAuth = (() => {
             </div>
         `;
 
-        // Login handler (Supabase)
+        // Login handler
         document.getElementById('li-btn').addEventListener('click', async () => {
             const email = document.getElementById('li-email').value.trim();
             const pass = document.getElementById('li-pass').value;
-            const errorBox = document.getElementById('li-error');
-            
-            errorBox.innerHTML = `<div class="small-muted mt-1">Autenticando...</div>`;
-            
-            const { data, error } = await NebulaSupabase.auth.signInWithPassword({
-                email: email,
-                password: pass
-            });
-
-            if (error) {
-                errorBox.innerHTML = `<div class="error-box mt-1">Falha no login: ${error.message}</div>`;
-            } else {
-                // Configura a chave de criptografia baseada na senha para decodificar AES
+            const user = state.users[email];
+            if (user && user.password === NebulaStorage.hashPasswordSync(pass)) {
+                // Configura a chave de criptografia baseada na senha
                 await NebulaStorage.setEncryptionKey(pass);
                 state.logged_in = true;
                 state.current_user = email;
-                
-                errorBox.innerHTML = `<div class="small-muted mt-1">Sincronizando com a nuvem...</div>`;
-                
+                if (!state.user_interest[email]) state.user_interest[email] = {};
                 await NebulaStorage.syncWorkspaceStateAsync(state, email);
                 state.page = 'Tela Principal';
                 NebulaApp.renderApp();
+            } else {
+                document.getElementById('li-error').innerHTML = `<div class="error-box mt-1">E-mail ou senha inválidos.</div>`;
             }
         });
 
-        // Register handler (Supabase)
-        document.getElementById('rg-btn').addEventListener('click', async () => {
+        // Register handler
+        document.getElementById('rg-btn').addEventListener('click', () => {
             const name = document.getElementById('rg-name').value.trim();
             const email = document.getElementById('rg-email').value.trim();
             const pass = document.getElementById('rg-pass').value;
             const research = document.getElementById('rg-research').value.trim();
-            const errorBox = document.getElementById('rg-error');
             
             if (!name || !email || !pass || !research) {
-                errorBox.innerHTML = `<div class="error-box mt-1">Preencha todos os campos.</div>`;
+                document.getElementById('rg-error').innerHTML = `<div class="error-box mt-1">Preencha todos os campos.</div>`;
                 return;
             }
-
-            errorBox.innerHTML = `<div class="small-muted mt-1">Criando conta...</div>`;
-
-            // Supabase auth
-            const { data, error } = await NebulaSupabase.auth.signUp({
-                email: email,
-                password: pass
-            });
-
-            if (error) {
-                errorBox.innerHTML = `<div class="error-box mt-1">Erro: ${error.message}</div>`;
+            if (state.users[email]) {
+                document.getElementById('rg-error').innerHTML = `<div class="error-box mt-1">Este e-mail já está cadastrado.</div>`;
                 return;
             }
-
-            // O Profile vai ser criado por um Trigger no SQL. Mas precisamos dar Update com os dados reais.
-            if (data.user) {
-                await NebulaSupabase.from('profiles').update({
-                    name: name,
-                    research: research
-                }).eq('id', data.user.id);
-            }
-
-            errorBox.innerHTML = `<div class="success-box mt-1">Conta criada com sucesso! Mude para Entrar e acesse sua conta.</div>`;
+            state.users[email] = { name, password: NebulaStorage.hashPasswordSync(pass), research };
+            NebulaStorage.ensureWorkspace(state, email);
+            state.user_interest[email] = {};
+            NebulaStorage.saveState(state);
+            document.getElementById('rg-error').innerHTML = `<div class="success-box mt-1">Conta criada com sucesso! Mude para Entrar.</div>`;
         });
 
         // Enter key listeners
