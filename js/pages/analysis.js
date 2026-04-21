@@ -100,7 +100,7 @@ const PageAnalysis = (() => {
                         </ul>
                     </div>
                     <div style="background:var(--copper-glow); border:1px solid rgba(217, 119, 74, 0.3); padding:1rem; border-radius:12px;">
-                        <div style="color:var(--copper-1); font-weight:600; margin-bottom:0.5rem">💡 Sugestões de Melhoria</div>
+                        <div style="color:var(--copper-1); font-weight:600; margin-bottom:0.5rem">Sugestões de Melhoria</div>
                         <ul style="padding-left:1.2rem; font-size:0.85rem; color:var(--text-white-80)">
                             ${aiReview.suggestions.map(s => `<li style="margin-bottom:0.4rem">${s}</li>`).join('')}
                         </ul>
@@ -148,7 +148,7 @@ const PageAnalysis = (() => {
             const doc = h.doc;
             hlContainer.innerHTML += `
                 <div style="background:rgba(255,255,255,0.05); padding:1rem; border-radius:12px; border:1px solid rgba(255,255,255,0.1);">
-                    <div style="color:var(--copper-1); font-weight:600; font-size:0.8rem; margin-bottom:0.3rem;">★ MATCH ALTO (${Math.round(h.score*100)}%)</div>
+                    <div style="color:var(--copper-1); font-weight:600; font-size:0.8rem; margin-bottom:0.3rem;">MATCH ALTO (${Math.round(h.score*100)}%)</div>
                     <div class="article-title">${doc.name}</div>
                     <div class="article-meta">${doc.author || 'Autor Desconhecido'} • ${doc.topic}</div>
                     <div class="article-abstract">${(doc.summary || 'Sem resumo disponível').slice(0,150)}...</div>

@@ -151,7 +151,7 @@ const PageRepository = (() => {
                     `).join('') + `</div>`;
                 }
 
-                const visIcon = doc.visibility === 'public' ? '🌐 Público' : '🔒 Privado';
+                const visIcon = doc.visibility === 'public' ? 'Público' : 'Privado';
                 const visStyle = doc.visibility === 'public' ? 'color:#10b981' : 'color:var(--text-white-60)';
                 const expiryText = doc.public_until ? ` até ${doc.public_until}` : '';
 

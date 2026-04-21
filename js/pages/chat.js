@@ -45,7 +45,7 @@ const PageChat = (() => {
                             <select class="select" id="chat-room-select" style="background: rgba(0,0,0,0.4);">
                                 ${rooms.map((r,i) => {
                                     const badge = r.unread ? ` (${r.unread} nova${r.unread>1?'s':''})` : '';
-                                    const icon = r.kind === 'private' ? '📝 ' : '💬 ';
+                                    const icon = r.kind === 'private' ? 'Doc: ' : 'Msg: ';
                                     return `<option value="${i}" data-peer="${r.peer}">${icon}${r.label}${badge}</option>`;
                                 }).join('')}
                             </select>
