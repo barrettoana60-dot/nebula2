@@ -114,7 +114,7 @@ const PageAnalysis = (() => {
                 <div id="ml-highlights" style="display:flex; flex-direction:column; gap:1rem;"></div>
             </div>
         `;
-        container.innerHTML = html;
+        container.innerHTML = html + htmlExtra;
 
         // Render ML Highlights
         const hlContainer = document.getElementById('ml-highlights');

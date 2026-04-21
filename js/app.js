@@ -59,6 +59,10 @@ const NebulaApp = (() => {
     }
 
     function navigate(page) {
+        // Save current state BEFORE navigating to prevent data loss
+        if (state.logged_in && state.current_user) {
+            NebulaStorage.saveState(state);
+        }
         state.page = page;
         renderNavbar();
         renderPage();
