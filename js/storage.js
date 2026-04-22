@@ -134,8 +134,7 @@ const NebulaStorage = (() => {
                 // Fetch profiles (for community)
                 const { data: profiles } = await window.NebulaSupabase.from('profiles').select('*');
                 if (profiles) {
-                    state.users = {};
-                    state.user_interest = {};
+                    // Merge Supabase profiles INTO state (don't overwrite demo researchers)
                     profiles.forEach(p => {
                         state.users[p.email] = {
                             name: p.name,
@@ -177,24 +176,35 @@ const NebulaStorage = (() => {
         state.repository = JSON.parse(JSON.stringify(ws.repository || []));
         state.search_history = [...(ws.search_history || [])];
 
-        // Ensure user interest is built if missing
-        if (!state.user_interest[email] || Object.keys(state.user_interest[email]).length === 0) {
-            rebuildInterests(state, email);
-        }
+        // Always rebuild user interest from docs + profile research
+        rebuildInterests(state, email);
     }
 
     function rebuildInterests(state, email) {
-        const docs = (state.workspaces[email] || {}).repository || [];
-        if (!docs.length) return;
+        state.user_interest[email] = state.user_interest[email] || {};
         
-        state.user_interest[email] = {};
+        // Build from documents
+        const docs = (state.workspaces[email] || {}).repository || [];
         docs.forEach(doc => {
             (doc.keywords || []).slice(0, 10).forEach(kw => {
                 state.user_interest[email][kw] = (state.user_interest[email][kw] || 0) + 1;
             });
         });
-        console.log(`[Storage] Interests rebuilt for ${email} from ${docs.length} docs.`);
+        
+        // Also build from research text in user profile
+        const user = state.users[email];
+        if (user && user.research && typeof TextEngine !== 'undefined') {
+            const researchKw = TextEngine.extractKeywordsTFIDF(user.research, 15);
+            researchKw.forEach(kw => {
+                state.user_interest[email][kw] = (state.user_interest[email][kw] || 0) + 2;
+            });
+        }
+        
+        if (Object.keys(state.user_interest[email]).length > 0) {
+            console.log(`[Storage] Interests rebuilt for ${email}: ${Object.keys(state.user_interest[email]).length} terms`);
+        }
     }
+
 
     function saveState(state) {
         try {
