@@ -100,6 +100,24 @@ const NebulaStorage = (() => {
         const ws = state.workspaces[email] || blankWorkspace();
         state.repository = JSON.parse(JSON.stringify(ws.repository || []));
         state.search_history = [...(ws.search_history || [])];
+
+        // Ensure user interest is built if missing
+        if (!state.user_interest[email] || Object.keys(state.user_interest[email]).length === 0) {
+            rebuildInterests(state, email);
+        }
+    }
+
+    function rebuildInterests(state, email) {
+        const docs = (state.workspaces[email] || {}).repository || [];
+        if (!docs.length) return;
+        
+        state.user_interest[email] = {};
+        docs.forEach(doc => {
+            (doc.keywords || []).slice(0, 10).forEach(kw => {
+                state.user_interest[email][kw] = (state.user_interest[email][kw] || 0) + 1;
+            });
+        });
+        console.log(`[Storage] Interests rebuilt for ${email} from ${docs.length} docs.`);
     }
 
     function saveState(state) {
@@ -178,6 +196,7 @@ const NebulaStorage = (() => {
         saveState,
         saveStateAsync,
         syncWorkspaceState,
-        syncWorkspaceStateAsync
+        syncWorkspaceStateAsync,
+        rebuildInterests
     };
 })();

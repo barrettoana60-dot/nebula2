@@ -19,8 +19,15 @@ const PageDashboard = (() => {
         const connections = getConnectedUsers(state, state.current_user, 6);
 
         let html = `
-            <div class="page-title">Bem-vindo, ${(user.name || '').split(' ')[0] || 'Pesquisador'}</div>
-            <div class="page-sub">${research ? `Tema da Pesquisa: <b>${research}</b>` : 'Configure sua área de pesquisa no Perfil para receber recomendações focadas.'}</div>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 0.5rem;">
+                <div>
+                    <div class="page-title">Bem-vindo, ${(user.name || '').split(' ')[0] || 'Pesquisador'}</div>
+                    <div class="page-sub">${research ? `Tema da Pesquisa: <b>${research}</b>` : 'Configure sua área de pesquisa no Perfil para receber recomendações focadas.'}</div>
+                </div>
+                <button class="btn btn-primary" style="background:var(--copper-1); box-shadow: 0 4px 15px rgba(217,119,74,0.4); border:none; height:48px; border-radius:14px;" onclick="NebulaTutorial.start(true)">
+                    <span style="margin-right:0.5rem">▶</span> ASSISTIR VÍDEO TUTORIAL
+                </button>
+            </div>
         `;
 
         // Metrics

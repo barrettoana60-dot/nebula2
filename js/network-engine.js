@@ -179,24 +179,43 @@ const NetworkEngine = (() => {
         const baseProfile = state.user_interest[baseEmail] || {};
         const otherProfile = state.user_interest[otherEmail] || {};
         
+        // Try to build interests if empty but documents exist
         const baseTerms = Object.keys(baseProfile);
         const otherTerms = Object.keys(otherProfile);
         
-        if (!baseTerms.length || !otherTerms.length) return null;
-        
-        let sim = 0;
         const shared_terms = [];
+        let sim = 0;
         
-        baseTerms.forEach(term => {
-            if (otherProfile[term]) {
-                shared_terms.push(term);
-                // Weight by frequency
-                sim += Math.min(baseProfile[term], otherProfile[term]) * 10;
+        if (baseTerms.length && otherTerms.length) {
+            baseTerms.forEach(term => {
+                if (otherProfile[term]) {
+                    shared_terms.push(term);
+                    // Weight by frequency, but normalization is needed
+                    sim += Math.min(baseProfile[term], otherProfile[term]) * 10;
+                }
+            });
+        }
+
+        // Add topic-based similarity from their repositories
+        const baseWs = state.workspaces[baseEmail] || {};
+        const otherWs = state.workspaces[otherEmail] || {};
+        const baseTopics = new Set((baseWs.repository || []).map(d => d.topic).filter(t => t));
+        const otherTopics = new Set((otherWs.repository || []).map(d => d.topic).filter(t => t));
+        
+        const shared_topics = [];
+        baseTopics.forEach(t => {
+            if (otherTopics.has(t)) {
+                shared_topics.push(t);
+                sim += 15; // Each shared topic is a strong link
             }
         });
         
-        if (sim < 5) return null;
-        return { shared_topics: shared_terms.slice(0, 3), shared_terms: shared_terms.slice(0, 8), similarity: Math.min(sim, 99) };
+        if (sim < 3) return null; // Lowered from 5 to 3
+        return { 
+            shared_topics: shared_topics.slice(0, 3), 
+            shared_terms: shared_terms.slice(0, 8), 
+            similarity: Math.min(sim, 99) 
+        };
     }
 
     function getConnectedUsers(state, email, limit = 8) {
