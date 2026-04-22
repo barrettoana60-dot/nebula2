@@ -210,13 +210,35 @@ const NetworkEngine = (() => {
             }
         });
         
-        if (sim < 3) return null; // Lowered from 5 to 3
+        // Compare exact articles
+        const baseDocs = new Set((baseWs.repository || []).map(d => d.name));
+        const otherDocs = (otherWs.repository || []);
+        
+        let sameArticles = 0;
+        otherDocs.forEach(d => {
+            if (baseDocs.has(d.name)) {
+                sameArticles++;
+                sim += 50; // HUGE boost for having the exact same article
+                if (!shared_topics.includes(d.topic) && d.topic) {
+                    shared_topics.push(d.topic);
+                }
+            }
+        });
+
+        if (sim < 3) return null;
+        
+        // If they have the exact same article, inject a "same article" label into topics to be visible
+        if (sameArticles > 0) {
+            shared_topics.unshift(`Artigo em Comum (${sameArticles})`);
+        }
+
         return { 
             shared_topics: shared_topics.slice(0, 3), 
             shared_terms: shared_terms.slice(0, 8), 
             similarity: Math.min(sim, 99) 
         };
     }
+
 
     function getConnectedUsers(state, email, limit = 8) {
         if (!email || !state.users[email]) return [];

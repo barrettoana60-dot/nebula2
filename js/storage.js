@@ -146,20 +146,20 @@ const NebulaStorage = (() => {
                     });
                 }
 
-                // Fetch workspace
-                const { data: wsData } = await window.NebulaSupabase.from('workspaces').select('*').eq('email', email).single();
-                if (wsData) {
-                    state.workspaces[email] = {
-                        repository: wsData.repository || [],
-                        search_history: wsData.search_history || []
-                    };
-                } else {
-                    state.workspaces[email] = blankWorkspace();
+                // Fetch ALL workspaces to allow cross-repository connections
+                const { data: allWs } = await window.NebulaSupabase.from('workspaces').select('email, repository');
+                if (allWs) {
+                    if (!state.workspaces) state.workspaces = {};
+                    allWs.forEach(w => {
+                        if (!state.workspaces[w.email]) state.workspaces[w.email] = blankWorkspace();
+                        state.workspaces[w.email].repository = w.repository || [];
+                    });
                 }
             } catch (err) {
                 console.error("Supabase sync failed, using local cache:", err);
             }
         }
+
 
         const ws = state.workspaces[email] || blankWorkspace();
         state.repository = JSON.parse(JSON.stringify(ws.repository || []));
