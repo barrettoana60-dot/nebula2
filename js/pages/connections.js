@@ -50,14 +50,35 @@ const PageConnections = (() => {
             const user = state.users[state.current_user] || {};
             
             if (view === 'global') {
+                // Use user's own docs + all community docs for a richer global view
+                const myDocs = ws.repository || [];
+                let allDocs = [...myDocs];
+                
+                // Pull community docs to enrich the global network
+                Object.entries(state.workspaces || {}).forEach(([email, w]) => {
+                    if (email !== state.current_user && w.repository) {
+                        allDocs = allDocs.concat(w.repository.slice(0, 3));
+                    }
+                });
+                
                 const ext = state.search_history.slice(0, 15);
-                data = NetworkEngine.buildResearchNetwork(ws.repository || [], ext, user.research);
+                data = NetworkEngine.buildResearchNetwork(allDocs, ext, user.research);
             } else {
+                // Rebuild interests before building connections
+                if (state.current_user) {
+                    NebulaStorage.rebuildInterests(state, state.current_user);
+                }
                 data = NetworkEngine.buildConnectionChainNetwork(state, state.current_user, 10);
             }
             
             if (!data || !data.nodes.length) {
-                c.innerHTML = '<div style="padding:4rem; text-align:center; color:var(--text-white-60)">Sem dados suficientes para mapear a rede. Explore ou envie mais documentos.</div>';
+                c.innerHTML = `
+                    <div style="padding:4rem; text-align:center; color:var(--text-white-60)">
+                        <div style="font-size:1.2rem; margin-bottom:1rem;">Sem dados suficientes para mapear a rede.</div>
+                        <div style="margin-bottom:1.5rem;">Adicione sua linha de pesquisa no Perfil e envie documentos no Repositório.</div>
+                        <button class="btn btn-primary" onclick="NebulaApp.navigate('Perfil')" style="margin-right:0.5rem;">Configurar Perfil</button>
+                        <button class="btn" onclick="NebulaApp.navigate('Repositório')">Enviar Documentos</button>
+                    </div>`;
                 return;
             }
 
@@ -66,35 +87,37 @@ const PageConnections = (() => {
 
             setTimeout(() => {
                 const plot = document.getElementById('network-container');
-                plot.on('plotly_click', function(clickData) {
-                    if (clickData.points && clickData.points.length > 0) {
-                        const pt = clickData.points[0];
-                        const node = currentNodes.find(n => n.label === pt.text || (pt.hovertext && pt.hovertext.includes(n.label)));
-                        
-                        if (node && node.type === 'researcher') {
-                            const emailTo = node.id.replace('researcher::', '');
-                            document.getElementById('net-action-title').innerText = `Conexão: ${node.label}`;
-                            document.getElementById('net-action-desc').innerText = `Vocês dois têm fortes ligações no tema: ${node.topic}`;
-                            document.getElementById('net-action-topics').innerHTML = `<span class="tag tag-copper">${node.topic}</span>`;
+                if (plot && plot.on) {
+                    plot.on('plotly_click', function(clickData) {
+                        if (clickData.points && clickData.points.length > 0) {
+                            const pt = clickData.points[0];
+                            const node = currentNodes.find(n => n.label === pt.text || (pt.hovertext && pt.hovertext.includes(n.label)));
                             
-                            const btn = document.getElementById('net-action-btn');
-                            btn.onclick = () => {
-                                document.getElementById('net-action-modal').style.display='none';
-                                // Set chat target and navigate
-                                state.chat_target = emailTo;
-                                state.chat_draft = `Olá ${node.label.split(' ')[0]}! Vi na Rede 3D que nós dois pesquisamos sobre ${node.topic}. Gostaria de trocar referências?`;
-                                state.page = 'Comunidade';
-                                NebulaApp.renderApp();
-                            };
-                            
-                            document.getElementById('net-action-modal').style.display = 'block';
+                            if (node && node.type === 'researcher') {
+                                const emailTo = node.id.replace('researcher::', '');
+                                document.getElementById('net-action-title').innerText = `Conexão: ${node.label}`;
+                                document.getElementById('net-action-desc').innerText = `Vocês dois têm fortes ligações no tema: ${node.topic}`;
+                                document.getElementById('net-action-topics').innerHTML = `<span class="tag tag-copper">${node.topic}</span>`;
+                                
+                                const btn = document.getElementById('net-action-btn');
+                                btn.onclick = () => {
+                                    document.getElementById('net-action-modal').style.display='none';
+                                    state.chat_target = emailTo;
+                                    state.chat_draft = `Olá ${node.label.split(' ')[0]}! Vi na Rede 3D que nós dois pesquisamos sobre ${node.topic}. Gostaria de trocar referências?`;
+                                    state.page = 'Comunidade';
+                                    NebulaApp.renderApp();
+                                };
+                                
+                                document.getElementById('net-action-modal').style.display = 'block';
+                            }
                         }
-                    }
-                });
+                    });
+                }
             }, 500);
 
         }, 100);
     }
+
 
     function switchTab(view, btnElement) {
         document.querySelectorAll('#net-tab-global, #net-tab-social').forEach(b => b.classList.remove('active'));
