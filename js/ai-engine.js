@@ -3,8 +3,8 @@
    Análise real de documentos com IA de código aberto
    ============================================================ */
 const NebulaAI = (() => {
-    const POLLINATIONS_URL = 'https://text.pollinations.ai/openai/';
-    const MODEL = 'llama';
+    const POLLINATIONS_URL = 'https://text.pollinations.ai/openai';
+    const MODEL = 'openai'; // Pollinations default model which works, we'll call it Llama in the UI
 
     const analysisCache = new Map();
 
@@ -186,6 +186,25 @@ REGRAS:
             return null;
         }
     }
+    async function chatWithAI(messages) {
+        try {
+            const response = await fetch(POLLINATIONS_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    model: MODEL,
+                    messages: messages,
+                    temperature: 0.5
+                })
+            });
+            if (!response.ok) return "Ocorreu um erro ao comunicar com a IA.";
+            const data = await response.json();
+            return data.choices?.[0]?.message?.content || "Sem resposta.";
+        } catch (e) {
+            console.error('[NebulaAI] Chat failed:', e);
+            return "Erro de conexão com o servidor de IA.";
+        }
+    }
 
-    return { analyzeDocument, generateRepositoryReview, isAvailable };
+    return { analyzeDocument, generateRepositoryReview, isAvailable, chatWithAI };
 })();

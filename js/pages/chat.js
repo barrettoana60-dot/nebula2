@@ -7,7 +7,10 @@ const PageChat = (() => {
     }
 
     function getAvailableRooms(state, email) {
-        const rooms = [{ id: `private::${email}`, label: 'Bloco de notas pessoal', peer: null, kind: 'private' }];
+        const rooms = [
+            { id: `private::${email}`, label: 'Bloco de notas pessoal', peer: null, kind: 'private' },
+            { id: `ai::llama33`, label: 'Llama 3.3 (Assistente IA)', peer: 'ai', kind: 'ai' }
+        ];
         const connections = getConnectedUsers(state, email, 12);
         connections.forEach(conn => {
             const roomId = buildRoomId(email, conn.email);
@@ -16,6 +19,7 @@ const PageChat = (() => {
         });
         return rooms;
     }
+
 
     function countUnread(state, roomId, email) {
         const msgs = (state.community_messages || []).filter(m => m.room_id === roomId && m.sender_email !== email);
@@ -148,7 +152,7 @@ const PageChat = (() => {
         
         renderMessages();
 
-        document.getElementById('chat-send-btn').addEventListener('click', () => {
+        document.getElementById('chat-send-btn').addEventListener('click', async () => {
             const text = chatDraft.value.trim();
             if (!text) return;
             const roomIdx = parseInt(roomSelect.value);
@@ -156,6 +160,8 @@ const PageChat = (() => {
             const sender = state.users[email] || {};
             
             if (!state.community_messages) state.community_messages = [];
+            
+            // Add user message
             state.community_messages.push({
                 id: Date.now().toString(36),
                 room_id: room.id,
@@ -170,7 +176,45 @@ const PageChat = (() => {
             NebulaStorage.saveState(state);
             chatDraft.value = '';
             renderMessages();
+
+            // If it's the AI room, fetch response
+            if (room.kind === 'ai') {
+                const btn = document.getElementById('chat-send-btn');
+                btn.disabled = true;
+                btn.textContent = 'Llama 3.3 está digitando...';
+
+                // Build context from previous messages in this room
+                const roomMsgs = state.community_messages.filter(m => m.room_id === room.id).slice(-10);
+                const sysPrompt = "Você é o Llama 3.3, um assistente especializado em metodologia científica, análise de dados e pesquisa acadêmica no sistema Nebula Research. Responda em português, de forma direta e profissional.";
+                const messages = [{ role: 'system', content: sysPrompt }];
+                roomMsgs.forEach(m => {
+                    messages.push({
+                        role: m.sender_email === 'ai@nebula' ? 'assistant' : 'user',
+                        content: m.text
+                    });
+                });
+
+                const aiResponse = await NebulaAI.chatWithAI(messages);
+                
+                state.community_messages.push({
+                    id: Date.now().toString(36),
+                    room_id: room.id,
+                    room_label: room.label,
+                    sender_email: 'ai@nebula',
+                    sender_name: 'Llama 3.3',
+                    sender_topic: 'Inteligência Artificial',
+                    text: aiResponse,
+                    created_at: new Date().toISOString().slice(0, 16).replace('T', ' '),
+                    timestamp: Date.now(),
+                });
+                NebulaStorage.saveState(state);
+                
+                btn.disabled = false;
+                btn.textContent = 'ENVIAR MENSAGEM';
+                renderMessages();
+            }
         });
+
 
         // Enter to send (Shift+Enter for new line)
         chatDraft.addEventListener('keydown', (e) => {
