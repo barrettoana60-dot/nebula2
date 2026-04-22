@@ -8,7 +8,17 @@ const NebulaApp = (() => {
         state = NebulaStorage.initState();
         initRippleEffect();
         renderApp();
+        
+        // Quietly fetch latest data from Supabase in background (fixes cross-browser sync on F5)
+        if (state.logged_in && state.current_user) {
+            NebulaStorage.syncWorkspaceStateAsync(state, state.current_user).then(() => {
+                if (state.page === 'Conexões' || state.page === 'Comunidade') {
+                    renderPage();
+                }
+            }).catch(e => console.error("Auto-sync failed", e));
+        }
     }
+
 
     function renderApp() {
         const navbar = document.getElementById('navbar');
