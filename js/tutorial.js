@@ -3,6 +3,7 @@
    ============================================================ */
 const NebulaTutorial = (() => {
     let currentStep = 0;
+    let isActive = false;
 
     const steps = [
         {
@@ -33,7 +34,7 @@ const NebulaTutorial = (() => {
         {
             title: "Conexões — Visão Social",
             text: "Na aba Visão Social (Comunidade), o sistema cruza seu perfil e repositório com outros pesquisadores. Encontre pessoas com temas, artigos e pesquisas em comum.",
-            target: "Conexões"
+            target: null
         },
         {
             title: "Comunidade",
@@ -48,25 +49,28 @@ const NebulaTutorial = (() => {
     ];
 
     function start() {
+        if (isActive) return;
         if (document.getElementById('tutorial-overlay')) return;
+        isActive = true;
         currentStep = 0;
-        renderOverlay();
+        showStep();
     }
 
-    function renderOverlay() {
+    function showStep() {
         const existing = document.getElementById('tutorial-overlay');
         if (existing) existing.remove();
 
         const step = steps[currentStep];
+        const progress = ((currentStep + 1) / steps.length) * 100;
 
         const overlay = document.createElement('div');
         overlay.id = 'tutorial-overlay';
         overlay.className = 'tutorial-animate-in';
         overlay.innerHTML = `
-            <div class="tutorial-backdrop"></div>
-            <div class="tutorial-card">
+            <div class="tutorial-backdrop" onclick="NebulaTutorial.skip()"></div>
+            <div class="tutorial-card" style="pointer-events:auto; cursor:default;">
                 <div class="tutorial-progress-bar">
-                    <div class="tutorial-progress-fill" style="width:${((currentStep + 1) / steps.length) * 100}%"></div>
+                    <div class="tutorial-progress-fill" style="width:${progress}%"></div>
                 </div>
                 <div class="tutorial-dots">
                     ${steps.map((_, i) => `<div class="tutorial-dot ${i === currentStep ? 'active' : (i < currentStep ? 'done' : '')}"></div>`).join('')}
@@ -75,61 +79,66 @@ const NebulaTutorial = (() => {
                 <div class="tutorial-title tutorial-title-slide">${step.title}</div>
                 <div class="tutorial-desc">${step.text}</div>
                 <div class="tutorial-actions">
-                    <button class="btn btn-sm" id="tour-skip-btn" style="opacity:0.6">Pular tutorial</button>
+                    <button class="btn btn-sm" onclick="NebulaTutorial.skip()" style="opacity:0.6">Pular tutorial</button>
                     <div style="display:flex; gap:0.5rem;">
-                        ${currentStep > 0 ? '<button class="btn btn-sm" id="tour-prev-btn">Anterior</button>' : ''}
-                        <button class="btn btn-primary btn-sm" id="tour-next-btn">${currentStep === steps.length - 1 ? 'Começar a usar' : 'Próximo'}</button>
+                        ${currentStep > 0 ? '<button class="btn btn-sm" onclick="NebulaTutorial.prev()">Anterior</button>' : ''}
+                        <button class="btn btn-primary btn-sm" onclick="NebulaTutorial.next()">${currentStep === steps.length - 1 ? 'Começar a usar' : 'Próximo'}</button>
                     </div>
                 </div>
             </div>
         `;
         document.body.appendChild(overlay);
 
-        // Navigate to the target tab if specified
+        // Navigate to the target tab
         if (step.target) {
-            NebulaApp.navigate(step.target);
-        }
-
-        document.getElementById('tour-next-btn').addEventListener('click', () => {
-            if (currentStep >= steps.length - 1) {
-                complete();
-            } else {
-                currentStep++;
-                renderOverlay();
-            }
-        });
-
-        document.getElementById('tour-skip-btn').addEventListener('click', complete);
-
-        const prevBtn = document.getElementById('tour-prev-btn');
-        if (prevBtn) {
-            prevBtn.addEventListener('click', () => {
-                currentStep--;
-                renderOverlay();
-            });
+            try { NebulaApp.navigate(step.target); } catch(e) { console.warn('[Tutorial] Nav error:', e); }
         }
     }
 
-    function complete() {
+    function next() {
+        if (currentStep >= steps.length - 1) {
+            skip();
+        } else {
+            currentStep++;
+            showStep();
+        }
+    }
+
+    function prev() {
+        if (currentStep > 0) {
+            currentStep--;
+            showStep();
+        }
+    }
+
+    function skip() {
+        isActive = false;
+
+        // Mark completed FIRST
+        try {
+            const state = NebulaApp.getState();
+            if (state.current_user && state.users[state.current_user]) {
+                state.users[state.current_user].tutorial_completed = 'v3';
+                NebulaStorage.saveState(state);
+            }
+        } catch(e) { console.warn('[Tutorial] Save error:', e); }
+
+        // Remove overlay
         const overlay = document.getElementById('tutorial-overlay');
         if (overlay) {
             overlay.className = 'tutorial-animate-out';
-            setTimeout(() => overlay.remove(), 400);
+            setTimeout(() => { try { overlay.remove(); } catch(e){} }, 400);
         }
 
-        NebulaApp.navigate('Tela Principal');
-
-        const state = NebulaApp.getState();
-        if (state.current_user && state.users[state.current_user]) {
-            state.users[state.current_user].tutorial_completed = 'v3';
-            NebulaStorage.saveState(state);
-        }
+        // Navigate back to dashboard
+        try { NebulaApp.navigate('Tela Principal'); } catch(e) {}
     }
 
     function shouldShow(state) {
+        if (isActive) return false;
         if (!state.current_user || !state.users[state.current_user]) return false;
         return state.users[state.current_user].tutorial_completed !== 'v3';
     }
 
-    return { start, shouldShow };
+    return { start, shouldShow, next, prev, skip };
 })();
