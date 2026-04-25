@@ -119,7 +119,7 @@ const NebulaTutorial = (() => {
             const state = NebulaApp.getState();
             if (state.current_user && state.users[state.current_user]) {
                 state.users[state.current_user].tutorial_completed = 'v3';
-                NebulaStorage.saveState(state);
+                NebulaStorage.saveStateAsync(state).catch(e => console.warn('[Tutorial] Async save error:', e));
             }
         } catch(e) { console.warn('[Tutorial] Save error:', e); }
 

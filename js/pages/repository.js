@@ -91,7 +91,7 @@ const PageRepository = (() => {
             wrap.style.display = 'block';
             txt.style.display = 'block';
 
-            const newDocs = [];
+            const pendingDocs = [];
             for (let i = 0; i < selectedFiles.length; i++) {
                 const file = selectedFiles[i];
                 const baseProgress = (i / selectedFiles.length) * 100;
@@ -104,46 +104,122 @@ const PageRepository = (() => {
                     });
                     record.visibility = visibility;
                     record.public_until = visibility === 'public' ? publicUntil : null;
-                    
-                    // Add to state immediately
-                    state.repository.push(record);
-                    newDocs.push(record);
-                    
-                    // Update user interest
-                    const email = state.current_user;
-                    if (email) {
-                        if (!state.user_interest[email]) state.user_interest[email] = {};
-                        record.keywords.slice(0, 12).forEach(t => {
-                            state.user_interest[email][t] = (state.user_interest[email][t] || 0) + 1;
-                        });
-                    }
-
-                    // Show AI badge in progress
-                    if (record.ai_analyzed) {
-                        txt.innerHTML = `<span style="color:#10b981">Analisado com IA</span> — ${file.name}`;
-                    }
+                    pendingDocs.push(record);
                 } catch (e) {
                     console.error('Failed to process', file.name, e);
                     txt.textContent = `Erro ao processar ${file.name}`;
                 }
             }
 
-            // Save state — await to ensure persistence
-            fill.style.width = '95%';
-            txt.textContent = 'Salvando no banco de dados...';
-            
-            try {
-                await NebulaStorage.saveStateAsync(state);
-            } catch (saveErr) {
-                console.error('Save failed, data is in local state:', saveErr);
-            }
-
             fill.style.width = '100%';
-            txt.textContent = `${newDocs.length} documento(s) adicionado(s) com sucesso!`;
-            txt.style.color = '#10b981';
+            txt.textContent = 'Processamento concluído. Aguardando revisão...';
             
-            btn.disabled = false;
-            btn.textContent = 'Analisar e adicionar';
+            // Build Review UI
+            wrap.style.display = 'none';
+            txt.style.display = 'none';
+            btn.style.display = 'none'; // Hide add button temporarily
+            
+            const reviewContainer = document.createElement('div');
+            reviewContainer.id = 'repo-review-container';
+            reviewContainer.className = 'glass mt-1';
+            
+            let currentReviewIndex = 0;
+            
+            const renderReview = () => {
+                if (currentReviewIndex >= pendingDocs.length) {
+                    // All reviewed, save state
+                    finishUpload();
+                    return;
+                }
+                const doc = pendingDocs[currentReviewIndex];
+                reviewContainer.innerHTML = `
+                    <div class="section-title" style="border:none; padding:0; margin-bottom:1rem;">
+                        Revisar Documento (${currentReviewIndex + 1} de ${pendingDocs.length})
+                    </div>
+                    <div class="input-group">
+                        <label class="input-label">Título do Documento</label>
+                        <input type="text" class="input" id="rev-name" value="${doc.name}">
+                    </div>
+                    <div class="grid-50-50" style="gap:1rem;">
+                        <div class="input-group">
+                            <label class="input-label">Autor(es)</label>
+                            <input type="text" class="input" id="rev-author" value="${doc.author || ''}">
+                        </div>
+                        <div class="input-group">
+                            <label class="input-label">Ano</label>
+                            <input type="text" class="input" id="rev-year" value="${doc.year || ''}">
+                        </div>
+                    </div>
+                    <div class="input-group">
+                        <label class="input-label">Tópico principal</label>
+                        <input type="text" class="input" id="rev-topic" value="${doc.topic || ''}">
+                    </div>
+                    <div class="input-group">
+                        <label class="input-label">Palavras-chave (separadas por vírgula)</label>
+                        <input type="text" class="input" id="rev-keywords" value="${(doc.keywords||[]).join(', ')}">
+                    </div>
+                    <div class="input-group">
+                        <label class="input-label">Resumo</label>
+                        <textarea class="input" id="rev-summary" style="height:100px; resize:vertical;">${doc.summary || ''}</textarea>
+                    </div>
+                    <div style="display:flex; gap:1rem; margin-top:1rem;">
+                        <button class="btn btn-primary" id="rev-confirm-btn" style="flex:1">Confirmar e Salvar</button>
+                        <button class="btn btn-danger" id="rev-discard-btn" style="flex:1">Descartar Arquivo</button>
+                    </div>
+                `;
+                
+                document.getElementById('rev-confirm-btn').addEventListener('click', () => {
+                    doc.name = document.getElementById('rev-name').value;
+                    doc.author = document.getElementById('rev-author').value;
+                    doc.year = document.getElementById('rev-year').value;
+                    doc.topic = document.getElementById('rev-topic').value;
+                    doc.keywords = document.getElementById('rev-keywords').value.split(',').map(s => s.trim()).filter(s => s);
+                    doc.summary = document.getElementById('rev-summary').value;
+                    
+                    state.repository.push(doc);
+                    
+                    // Update user interest
+                    const email = state.current_user;
+                    if (email) {
+                        if (!state.user_interest[email]) state.user_interest[email] = {};
+                        doc.keywords.slice(0, 12).forEach(t => {
+                            state.user_interest[email][t] = (state.user_interest[email][t] || 0) + 1;
+                        });
+                    }
+                    
+                    currentReviewIndex++;
+                    renderReview();
+                });
+                
+                document.getElementById('rev-discard-btn').addEventListener('click', () => {
+                    currentReviewIndex++;
+                    renderReview();
+                });
+            };
+            
+            document.getElementById('repo-upload-container').appendChild(reviewContainer);
+            renderReview();
+            
+            async function finishUpload() {
+                reviewContainer.remove();
+                btn.style.display = 'block';
+                btn.disabled = true;
+                btn.textContent = 'Salvando no banco de dados...';
+                
+                try {
+                    await NebulaStorage.saveStateAsync(state);
+                } catch (saveErr) {
+                    console.error('Save failed, data is in local state:', saveErr);
+                }
+
+                btn.disabled = false;
+                btn.textContent = 'Analisar e adicionar';
+                
+                selectedFiles = [];
+                fileInput.value = '';
+                document.getElementById('repo-file-name').textContent = 'Clique ou arraste arquivos (PDF, DOCX, CSV, Imagens, etc.)';
+                renderList(document.getElementById('repo-list-container'), state);
+            }
             
             setTimeout(() => {
                 wrap.style.display = 'none';
@@ -244,6 +320,7 @@ const PageRepository = (() => {
                                         </table>
                                         <div style="margin-top:0.5rem;font-size:0.7rem;${visStyle}">${visIcon}${expiryText}</div>
                                         ${doc.ai_analyzed ? '<div style="margin-top:0.4rem;font-size:0.7rem;color:#10b981">Analisado por IA (Llama 3.3)</div>' : ''}
+                                        <button class="btn btn-danger mt-1" style="width:100%; font-size: 0.8rem; padding: 0.5rem;" onclick="window._deleteRepositoryDoc('${doc.id}')">Excluir Arquivo</button>
                                     </div>
                                     ${relHtml}
                                 </div>
@@ -252,6 +329,14 @@ const PageRepository = (() => {
                     </div>
                 `;
             }).join('');
+        };
+        
+        window._deleteRepositoryDoc = async (id) => {
+            if (confirm('Tem certeza que deseja excluir este arquivo do seu repositório? Essa ação não pode ser desfeita.')) {
+                state.repository = state.repository.filter(d => d.id !== id);
+                await NebulaStorage.saveStateAsync(state);
+                renderList(document.getElementById('repo-list-container'), state);
+            }
         };
 
         renderDocs('');
