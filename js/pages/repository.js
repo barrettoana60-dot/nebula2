@@ -7,11 +7,12 @@ const PageRepository = (() => {
             <div class="page-title">Repositório</div>
             <div class="page-sub">Envie seus documentos para análise completa com IA: texto, palavras-chave, resumo, estrutura e conexões</div>
             
-            <div class="glass">
+            <div class="glass" id="repo-upload-container">
                 <div class="file-drop" id="repo-drop" onclick="document.getElementById('repo-file-input').click()">
                     <span id="repo-file-name">Clique ou arraste arquivos (PDF, DOCX, CSV, Imagens, etc.)</span>
                     <input type="file" id="repo-file-input" multiple accept=".pdf,.docx,.txt,.md,.csv,.xlsx,.xls,.png,.jpg,.jpeg,.webp,.py,.json">
                 </div>
+
 
                 <div class="grid-2 mt-1">
                     <div class="input-group" style="margin-bottom:0">
