@@ -182,9 +182,48 @@ REGRAS:
                 suggestions: Array.isArray(result.suggestions) ? result.suggestions : []
             };
         } catch (err) {
-            console.error('[NebulaAI] Repo Review failed:', err);
-            return null;
+            console.warn('[NebulaAI] Repo Review failed (ENOSPC), falling back to local heuristic:', err);
+            return generateLocalRepositoryReview(docs);
         }
+    }
+
+    function generateLocalRepositoryReview(docs) {
+        if (!docs || docs.length === 0) return null;
+        
+        const topics = new Set(docs.map(d => d.topic).filter(Boolean));
+        const authors = new Set(docs.map(d => d.author).filter(a => a && a !== 'Desconhecido'));
+        const years = docs.map(d => parseInt(d.year)).filter(y => !isNaN(y));
+        const currentYear = new Date().getFullYear();
+        
+        const recentDocs = years.filter(y => y >= currentYear - 5).length;
+        const isRecent = recentDocs >= Math.ceil(docs.length * 0.4);
+        const isDiverse = topics.size >= 3;
+        
+        const strengths = [];
+        const weaknesses = [];
+        const suggestions = [];
+        
+        // Strengths
+        strengths.push(`Acervo consolidado com ${docs.length} documento(s) arquivado(s).`);
+        if (isDiverse) strengths.push(`Alta diversidade temática abrangendo ${topics.size} áreas do conhecimento.`);
+        else strengths.push(`Foco intenso e especializado, ideal para pesquisa de nicho.`);
+        if (isRecent) strengths.push(`Excelente atualidade bibliográfica (muitos artigos recentes).`);
+        
+        // Weaknesses
+        if (!isDiverse && docs.length > 3) weaknesses.push(`Risco de bolha epistêmica: pouca variação de macrotópicos.`);
+        if (docs.length < 5) weaknesses.push(`Volume total do repositório ainda é muito baixo para análises profundas.`);
+        if (!isRecent && years.length > 0) weaknesses.push(`Parte considerável do acervo está desatualizada (mais de 5 anos).`);
+        if (authors.size <= Math.max(1, docs.length * 0.3)) weaknesses.push(`Alta concentração em poucos autores. Falta de pluralidade de vozes.`);
+        
+        // Fix empty weaknesses if it's perfectly balanced
+        if (weaknesses.length === 0) weaknesses.push(`Não foram detectadas falhas graves de estrutura no acervo atual.`);
+        
+        // Suggestions
+        if (!isDiverse) suggestions.push(`Explore campos transversais à sua área para enriquecer as referências.`);
+        if (!isRecent) suggestions.push(`Busque artigos publicados a partir de ${currentYear - 3} para atualizar as citações.`);
+        suggestions.push(`Utilize o Ecosistema 3D (Visão Social) para descobrir o que outros autores estão lendo.`);
+        
+        return { strengths, weaknesses, suggestions };
     }
     async function chatWithAI(messages) {
         try {
