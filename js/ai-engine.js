@@ -188,18 +188,15 @@ REGRAS:
     }
     async function chatWithAI(messages) {
         try {
-            const response = await fetch(POLLINATIONS_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    model: MODEL,
-                    messages: messages,
-                    temperature: 0.5
-                })
-            });
+            // Fallback para GET devido ao erro 500 ENOSPC no POST da Pollinations API
+            const promptText = messages.map(m => m.content).join('\n\n');
+            const url = `https://text.pollinations.ai/${encodeURIComponent(promptText)}`;
+            
+            const response = await fetch(url, { method: 'GET' });
             if (!response.ok) return "Ocorreu um erro ao comunicar com a IA.";
-            const data = await response.json();
-            return data.choices?.[0]?.message?.content || "Sem resposta.";
+            
+            const text = await response.text();
+            return text || "Sem resposta.";
         } catch (e) {
             console.error('[NebulaAI] Chat failed:', e);
             return "Erro de conexão com o servidor de IA.";
