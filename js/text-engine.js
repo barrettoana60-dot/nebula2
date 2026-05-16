@@ -136,7 +136,10 @@ const TextEngine = (() => {
         const t = normalize(text);
         let best = fallback, bestScore = 0;
         for (const [topic, terms] of Object.entries(TOPIC_RULES)) {
-            const score = terms.reduce((s, term) => s + (t.includes(term) ? 2 : 0), 0);
+            const score = terms.reduce((s, term) => {
+                const regex = new RegExp(`\\b${term}\\b`, 'i');
+                return s + (regex.test(t) ? 2 : 0);
+            }, 0);
             if (score > bestScore) { bestScore = score; best = topic; }
         }
         return best;
