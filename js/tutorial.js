@@ -119,6 +119,7 @@ const NebulaTutorial = (() => {
             const state = NebulaApp.getState();
             if (state.current_user && state.users[state.current_user]) {
                 state.users[state.current_user].tutorial_completed = 'v3';
+                state.is_new_user = false;
                 NebulaStorage.saveStateAsync(state).catch(e => console.warn('[Tutorial] Async save error:', e));
             }
         } catch(e) { console.warn('[Tutorial] Save error:', e); }
@@ -137,7 +138,7 @@ const NebulaTutorial = (() => {
     function shouldShow(state) {
         if (isActive) return false;
         if (!state.current_user || !state.users[state.current_user]) return false;
-        return state.users[state.current_user].tutorial_completed !== 'v3';
+        return state.is_new_user === true;
     }
 
     return { start, shouldShow, next, prev, skip };

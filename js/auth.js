@@ -54,7 +54,7 @@ const PageAuth = (() => {
         `;
 
         document.getElementById('li-btn').addEventListener('click', async () => {
-            const email = document.getElementById('li-email').value.trim();
+            const email = document.getElementById('li-email').value.trim().toLowerCase();
             const pass = document.getElementById('li-pass').value;
             const errorBox = document.getElementById('li-error');
             
@@ -83,7 +83,7 @@ const PageAuth = (() => {
 
         document.getElementById('rg-btn').addEventListener('click', async () => {
             const name = document.getElementById('rg-name').value.trim();
-            const email = document.getElementById('rg-email').value.trim();
+            const email = document.getElementById('rg-email').value.trim().toLowerCase();
             const pass = document.getElementById('rg-pass').value;
             const research = document.getElementById('rg-research').value.trim();
             const errorBox = document.getElementById('rg-error');
@@ -102,6 +102,7 @@ const PageAuth = (() => {
             
             state.users[email] = { name, research, pass, tutorial_completed: false };
             state.user_interest[email] = {};
+            state.is_new_user = true; // Flagra para o tutorial rodar apenas no 1º login
             if (!state.workspaces) state.workspaces = {};
             state.workspaces[email] = NebulaStorage.blankWorkspace();
             

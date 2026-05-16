@@ -103,6 +103,15 @@ const PageSearch = (() => {
 
         const localResults = DocumentEngine.localSearch(query, state.repository || []);
 
+        html += `
+            <div class="glass" id="ai-recs-container" style="margin-bottom: 1rem; border: 1px solid rgba(217, 119, 74, 0.4);">
+                <div class="section-title"><span style="color:#d9774a; margin-right:8px;">✦</span> Recomendações da IA (Llama 3.3)</div>
+                <div id="ai-recs-content" style="padding: 0.5rem 0;">
+                    <div class="spinner-overlay" style="position:relative; min-height:40px; background:transparent;"><div class="spinner"></div></div>
+                </div>
+            </div>
+        `;
+
         html += `<div class="grid-2">`;
         
         // Local Results
@@ -192,6 +201,26 @@ const PageSearch = (() => {
         }
 
         resContainer.innerHTML = html;
+
+        // Fetch AI Recommendations asynchronously
+        if (email && state.users[email]) {
+            const userResearch = state.users[email].research || 'Pesquisa acadêmica geral';
+            const aiPrompt = [
+                { role: 'system', content: 'Você é um assistente acadêmico especialista. A partir da linha de pesquisa do usuário e de sua busca atual, recomende de 2 a 3 artigos científicos altamente específicos e reais que ele deveria ler. Retorne APENAS HTML válido (use <ul>, <li>, <b>). Seja direto, sem texto introdutório.' },
+                { role: 'user', content: `Linha de Pesquisa do Usuário: ${userResearch}\nBusca Atual: ${query}\n\nPor favor, recomende artigos com título, autor(es) e uma breve justificativa de relevância.` }
+            ];
+            
+            NebulaAI.chatWithAI(aiPrompt).then(res => {
+                const aiContent = document.getElementById('ai-recs-content');
+                if (aiContent) {
+                    let cleanRes = res.replace(/^```(?:html)?\s*/i, '').replace(/\s*```$/i, '');
+                    aiContent.innerHTML = `<div style="font-size:0.95rem; line-height:1.6; color:var(--text-white-80);">${cleanRes}</div>`;
+                }
+            }).catch(err => {
+                const aiContent = document.getElementById('ai-recs-content');
+                if (aiContent) aiContent.innerHTML = `<div class="small-muted">Não foi possível carregar as recomendações da IA no momento.</div>`;
+            });
+        }
     }
 
     return { render };

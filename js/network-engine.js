@@ -176,10 +176,15 @@ const NetworkEngine = (() => {
     }
 
     function compareRepositories(state, baseEmail, otherEmail) {
+        // Rebuild interests just to be sure both are up to date
+        if (state.current_user) {
+            NebulaStorage.rebuildInterests(state, baseEmail);
+            NebulaStorage.rebuildInterests(state, otherEmail);
+        }
+
         const baseProfile = state.user_interest[baseEmail] || {};
         const otherProfile = state.user_interest[otherEmail] || {};
         
-        // Try to build interests if empty but documents exist
         const baseTerms = Object.keys(baseProfile);
         const otherTerms = Object.keys(otherProfile);
         
@@ -190,10 +195,19 @@ const NetworkEngine = (() => {
             baseTerms.forEach(term => {
                 if (otherProfile[term]) {
                     shared_terms.push(term);
-                    // Weight by frequency, but normalization is needed
                     sim += Math.min(baseProfile[term], otherProfile[term]) * 10;
                 }
             });
+        }
+
+        // Compare User Research Strings (Cosine Similarity)
+        const baseUser = state.users[baseEmail];
+        const otherUser = state.users[otherEmail];
+        if (baseUser && otherUser && baseUser.research && otherUser.research) {
+            const textSim = TextEngine.cosineSimilarity(baseUser.research, otherUser.research);
+            if (textSim > 0.15) {
+                sim += textSim * 200; // Boost heavily if research descriptions are similar
+            }
         }
 
         // Add topic-based similarity from their repositories
@@ -210,13 +224,22 @@ const NetworkEngine = (() => {
             }
         });
         
-        // Compare exact articles
-        const baseDocs = new Set((baseWs.repository || []).map(d => d.name));
+        // Use user's general topic as fallback if repository topics don't match
+        const baseTopic = TextEngine.detectTopic(baseUser?.research || '');
+        const otherTopic = TextEngine.detectTopic(otherUser?.research || '');
+        if (baseTopic === otherTopic && baseTopic && !shared_topics.includes(baseTopic)) {
+            shared_topics.push(baseTopic);
+            sim += 15;
+        }
+
+        // Compare exact articles (case insensitive)
+        const baseDocs = (baseWs.repository || []).map(d => (d.name || '').toLowerCase());
         const otherDocs = (otherWs.repository || []);
         
         let sameArticles = 0;
         otherDocs.forEach(d => {
-            if (baseDocs.has(d.name)) {
+            const docName = (d.name || '').toLowerCase();
+            if (baseDocs.includes(docName)) {
                 sameArticles++;
                 sim += 50; // HUGE boost for having the exact same article
                 if (!shared_topics.includes(d.topic) && d.topic) {
@@ -224,6 +247,11 @@ const NetworkEngine = (() => {
                 }
             }
         });
+
+        // Add most significant shared terms as topics if list is empty
+        if (shared_topics.length === 0 && shared_terms.length > 0) {
+            shared_topics.push(shared_terms[0]);
+        }
 
         if (sim < 3) return null;
         
