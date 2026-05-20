@@ -43,7 +43,7 @@ Analise o texto do documento fornecido e retorne APENAS um JSON válido com esta
   "key_findings": "Principais descobertas em 1-2 frases",
   "methodology": "Metodologia utilizada ou null",
   "references_detected": 0,
-  "deep_insight": "Análise crítica profunda e detalhada (2 a 3 parágrafos curtos) conectando diretamente este documento com a linha de pesquisa do usuário informada. Descreva as contribuições e possíveis aplicações."
+  "deep_insight": "Análise crítica e teórica PROFUNDA em nível de doutorado (mínimo de 3 parágrafos ricos em detalhes). Correlacione o conteúdo metodológico e teórico do texto com a linha de pesquisa do usuário de maneira não óbvia, apontando inovações e fraquezas."
 }
 
 REGRAS:

@@ -190,13 +190,13 @@ const PageSearch = (() => {
                 const vContent = document.getElementById('ai-vision-content');
                 if (vContent) {
                     if (!vRes || vRes.error) {
-                        vContent.innerHTML = \`<div class="small-muted">Não foi possível carregar a análise visual da imagem.</div>\`;
+                        vContent.innerHTML = `<div class="small-muted">Não foi possível carregar a análise visual da imagem.</div>`;
                     } else {
-                        vContent.innerHTML = \`
-                            <div style="margin-bottom:0.8rem; font-size:0.95rem;"><b>Descrição Técnica:</b> <span style="color:var(--text-white-80)">\${vRes.description || ''}</span></div>
-                            <div style="margin-bottom:0.8rem; font-size:0.95rem;"><b>Conexão com sua Pesquisa:</b> <span style="color:var(--copper-1)">\${vRes.insight || ''}</span></div>
-                            <div style="margin-top:0.5rem;">\${(vRes.keywords||[]).map(k=>\`<span class="tag tag-copper">\${k}</span>\`).join('')}</div>
-                        \`;
+                        vContent.innerHTML = `
+                            <div style="margin-bottom:0.8rem; font-size:0.95rem;"><b>Descrição Técnica:</b> <span style="color:var(--text-white-80)">${vRes.description || ''}</span></div>
+                            <div style="margin-bottom:0.8rem; font-size:0.95rem;"><b>Conexão com sua Pesquisa:</b> <span style="color:var(--copper-1)">${vRes.insight || ''}</span></div>
+                            <div style="margin-top:0.5rem;">${(vRes.keywords||[]).map(k=>`<span class="tag tag-copper">${k}</span>`).join('')}</div>
+                        `;
                     }
                 }
             };

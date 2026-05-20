@@ -36,7 +36,7 @@ Retorne APENAS um JSON válido com a exata estrutura:
   "strengths": ["Ponto forte 1", "Ponto forte 2"],
   "weaknesses": ["Ponto fraco 1", "Ponto fraco 2"],
   "suggestions": ["Sugestão 1", "Sugestão 2"],
-  "deep_insight": "Um ou dois parágrafos profundos avaliando como o acervo do usuário está alinhado com a linha de pesquisa dele, apontando lacunas ou potenciais inovadores não óbvios."
+  "deep_insight": "Um diagnóstico e ensaio escrito em nível de pós-doutorado, minucioso e complexo (pelo menos 3 parágrafos grandes), avaliando metodologicamente como o acervo do usuário constrói sua linha de pesquisa, revelando hiatos intelectuais e fronteiras inexploradas."
 }
 
 REGRAS:
