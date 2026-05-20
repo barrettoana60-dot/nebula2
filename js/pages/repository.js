@@ -92,6 +92,9 @@ const PageRepository = (() => {
             wrap.style.display = 'block';
             txt.style.display = 'block';
 
+            const email = state.current_user;
+            const userResearch = (email && state.users[email]) ? state.users[email].research : null;
+
             const pendingDocs = [];
             for (let i = 0; i < selectedFiles.length; i++) {
                 const file = selectedFiles[i];
@@ -102,7 +105,7 @@ const PageRepository = (() => {
                 try {
                     const record = await DocumentEngine.makeDocumentRecord(file, (stage) => {
                         txt.textContent = `${file.name}: ${stage}`;
-                    });
+                    }, userResearch);
                     record.visibility = visibility;
                     record.public_until = visibility === 'public' ? publicUntil : null;
                     pendingDocs.push(record);
@@ -299,6 +302,7 @@ const PageRepository = (() => {
                             <div class="grid-60-40 mt-1">
                                 <div>
                                     <div class="mb-1"><b>Resumo:</b><br><span class="small-muted">${doc.summary}</span></div>
+                                    ${doc.deep_insight ? `<div class="mb-1" style="background: rgba(217,119,74,0.1); padding: 0.8rem; border-radius: 8px; border-left: 3px solid var(--copper-1);"><b><span style="color:#d9774a;">✦ Llama Insight (Sua Pesquisa):</span></b><br><span style="color:var(--text-white-80); font-size:0.9rem;">${doc.deep_insight}</span></div>` : ''}
                                     ${doc.key_findings ? `<div class="mb-1"><b>Principais achados:</b><br><span class="small-muted">${doc.key_findings}</span></div>` : ''}
                                     ${doc.methodology ? `<div class="mb-1"><b>Metodologia:</b><br><span class="small-muted">${doc.methodology}</span></div>` : ''}
                                     <div class="mb-1"><b>Palavras-chave:</b><br>${(doc.keywords||[]).slice(0, 18).map(k => `<span class="tag">${k}</span>`).join('')}</div>

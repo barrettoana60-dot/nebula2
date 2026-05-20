@@ -12,7 +12,7 @@ export default async function handler(req, res) {
         return res.status(405).json({ error: 'Method not allowed' });
     }
 
-    const { text, fileName, fileKind } = req.body;
+    const { text, fileName, fileKind, userResearch } = req.body;
 
     if (!text || text.length < 30) {
         return res.status(400).json({ error: 'Text too short for analysis' });
@@ -42,7 +42,8 @@ Analise o texto do documento fornecido e retorne APENAS um JSON válido com esta
   "document_type": "Tipo do documento",
   "key_findings": "Principais descobertas em 1-2 frases",
   "methodology": "Metodologia utilizada ou null",
-  "references_detected": 0
+  "references_detected": 0,
+  "deep_insight": "Análise crítica profunda e detalhada (2 a 3 parágrafos curtos) conectando diretamente este documento com a linha de pesquisa do usuário informada. Descreva as contribuições e possíveis aplicações."
 }
 
 REGRAS:
@@ -50,7 +51,7 @@ REGRAS:
 - O resumo deve refletir fielmente o documento
 - Retorne SOMENTE o JSON`;
 
-    const userPrompt = `Arquivo: "${fileName}" (Tipo: ${fileKind})\n\nTexto:\n---\n${truncatedText}\n---\n\nAnalise e retorne o JSON.`;
+    const userPrompt = `Arquivo: "${fileName}" (Tipo: ${fileKind})\nLinha de Pesquisa do Usuário: ${userResearch || 'Geral'}\n\nTexto:\n---\n${truncatedText}\n---\n\nAnalise e retorne o JSON.`;
 
     try {
         const response = await fetch(GROQ_URL, {
@@ -108,6 +109,7 @@ REGRAS:
             key_findings: typeof result.key_findings === 'string' ? result.key_findings : null,
             methodology: typeof result.methodology === 'string' ? result.methodology : null,
             references_detected: typeof result.references_detected === 'number' ? result.references_detected : 0,
+            deep_insight: typeof result.deep_insight === 'string' ? result.deep_insight : null,
             ai_analyzed: true
         };
 
