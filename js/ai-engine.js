@@ -75,12 +75,17 @@ const NebulaAI = (() => {
                 body: JSON.stringify({ docs, userResearch })
             });
 
-            if (!response.ok) throw new Error('API error');
+            if (!response.ok) {
+                const errData = await response.json().catch(()=>({}));
+                throw new Error(errData.error || 'API error');
+            }
 
             return await response.json();
         } catch (err) {
             console.warn('[NebulaAI] Repo Review failed via API, falling back to local heuristic:', err);
-            return generateLocalRepositoryReview(docs);
+            const fallback = generateLocalRepositoryReview(docs);
+            fallback.deep_insight = `[ERRO NA IA] A API falhou em responder. O administrador precisa configurar a GROQ_API_KEY na Vercel para o Llama 3.3 funcionar. Detalhe técnico: ${err.message}`;
+            return fallback;
         }
     }
 
@@ -130,13 +135,16 @@ const NebulaAI = (() => {
                 body: JSON.stringify({ messages })
             });
             
-            if (!response.ok) return "Ocorreu um erro ao comunicar com a IA.";
+            if (!response.ok) {
+                const errData = await response.json().catch(()=>({}));
+                return `Ocorreu um erro ao comunicar com a IA. Detalhe: ${errData.error || response.statusText}. Verifique se a chave de API (GROQ_API_KEY) está configurada na Vercel.`;
+            }
             
             const data = await response.json();
             return data.reply || "Sem resposta.";
         } catch (e) {
             console.error('[NebulaAI] Chat failed:', e);
-            return "Erro de conexão com o servidor de IA.";
+            return "Erro de conexão com o servidor de IA. A API pode estar fora do ar ou não configurada.";
         }
     }
 
