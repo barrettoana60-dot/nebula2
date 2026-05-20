@@ -53,12 +53,13 @@ REGRAS:
 
     const userPrompt = `Arquivo: "${fileName}" (Tipo: ${fileKind})\nLinha de Pesquisa do Usuário: ${userResearch || 'Geral'}\n\nTexto:\n---\n${truncatedText}\n---\n\nAnalise e retorne o JSON.`;
 
+    const MODEL = 'llama';
+
     try {
-        const response = await fetch(GROQ_URL, {
+        const response = await fetch('https://text.pollinations.ai/openai/chat/completions', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${GROQ_API_KEY}`
+                'Content-Type': 'application/json'
             },
             body: JSON.stringify({
                 model: MODEL,

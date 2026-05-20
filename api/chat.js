@@ -18,19 +18,13 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'Invalid messages array' });
     }
 
-    const GROQ_API_KEY = process.env.GROQ_API_KEY;
-    if (!GROQ_API_KEY) {
-        return res.status(500).json({ error: 'GROQ_API_KEY not configured' });
-    }
-    const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
-    const MODEL = 'llama-3.3-70b-versatile';
+    const MODEL = 'llama';
 
     try {
-        const response = await fetch(GROQ_URL, {
+        const response = await fetch('https://text.pollinations.ai/openai/chat/completions', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${GROQ_API_KEY}`
+                'Content-Type': 'application/json'
             },
             body: JSON.stringify({
                 model: MODEL,

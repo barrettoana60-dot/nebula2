@@ -46,11 +46,10 @@ ${communityProfiles.map(p => `- Nome: ${p.name || 'Desconhecido'} | Email: ${p.e
 Por favor, encontre as melhores conexões e retorne o JSON.`;
 
     try {
-        const response = await fetch(GROQ_URL, {
+        const response = await fetch('https://text.pollinations.ai/openai/chat/completions', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${GROQ_API_KEY}`
+                'Content-Type': 'application/json'
             },
             body: JSON.stringify({
                 model: MODEL,
