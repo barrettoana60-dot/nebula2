@@ -7,7 +7,7 @@ const NebulaAI = (() => {
 
     const analysisCache = new Map();
 
-    async function analyzeDocument(text, fileName, fileKind) {
+    async function analyzeDocument(text, fileName, fileKind, userResearch) {
         if (!text || text.length < 30) return null;
 
         const cacheKey = hashText(text.slice(0, 2000) + fileName);
@@ -19,7 +19,7 @@ const NebulaAI = (() => {
             const response = await fetch(`${API_BASE}/analyze`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ text, fileName, fileKind })
+                body: JSON.stringify({ text, fileName, fileKind, userResearch })
             });
 
             if (!response.ok) {
@@ -46,18 +46,33 @@ const NebulaAI = (() => {
         return 'ai_' + hash.toString(36);
     }
 
+    async function analyzeImage(base64Image, userResearch, query) {
+        try {
+            const response = await fetch(`${API_BASE}/vision`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ base64Image, userResearch, query })
+            });
+            if (!response.ok) return null;
+            return await response.json();
+        } catch (err) {
+            console.error('[NebulaAI] Vision failed:', err);
+            return null;
+        }
+    }
+
     async function isAvailable() {
         return true;
     }
 
-    async function generateRepositoryReview(docs) {
+    async function generateRepositoryReview(docs, userResearch) {
         if (!docs || docs.length === 0) return null;
         
         try {
             const response = await fetch(`${API_BASE}/review`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ docs })
+                body: JSON.stringify({ docs, userResearch })
             });
 
             if (!response.ok) throw new Error('API error');
@@ -125,5 +140,20 @@ const NebulaAI = (() => {
         }
     }
 
-    return { analyzeDocument, generateRepositoryReview, isAvailable, chatWithAI };
+    async function findConnections(userProfile, communityProfiles) {
+        try {
+            const response = await fetch(`${API_BASE}/connections`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userProfile, communityProfiles })
+            });
+            if (!response.ok) return null;
+            return await response.json();
+        } catch (err) {
+            console.error('[NebulaAI] Connections failed:', err);
+            return null;
+        }
+    }
+
+    return { analyzeDocument, generateRepositoryReview, isAvailable, chatWithAI, analyzeImage, findConnections };
 })();

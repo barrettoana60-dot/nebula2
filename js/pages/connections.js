@@ -117,11 +117,85 @@ const PageConnections = (() => {
         NetworkEngine.render3DNetwork('network-container', data.nodes, data.edges);
     }
 
-    function loadSocialView(c, state) {
+    async function loadSocialView(c, state) {
         // Rebuild interests from research text + docs before comparing
         if (state.current_user) {
             NebulaStorage.rebuildInterests(state, state.current_user);
         }
+
+        // --- INÍCIO DA INTEGRAÇÃO COM LLAMA 3.3 ---
+        // Clean existing overlay if any
+        const oldOverlay = document.getElementById('ai-connections-overlay');
+        if (oldOverlay) oldOverlay.remove();
+
+        const userEmail = state.current_user;
+        const userObj = state.users[userEmail];
+        
+        if (userObj) {
+            const userProfile = {
+                name: userObj.name,
+                email: userEmail,
+                research: userObj.research,
+                topKeywords: Object.keys(state.user_interest[userEmail] || {}).slice(0, 5)
+            };
+
+            const communityProfiles = Object.keys(state.users)
+                .filter(e => e !== userEmail)
+                .map(e => ({
+                    name: state.users[e].name,
+                    email: e,
+                    research: state.users[e].research,
+                    topKeywords: Object.keys(state.user_interest[e] || {}).slice(0, 5)
+                }));
+
+            // Render loading state for AI
+            const aiOverlay = document.createElement('div');
+            aiOverlay.id = 'ai-connections-overlay';
+            aiOverlay.style = 'position:absolute; top:20px; right:20px; width: 340px; background:rgba(217, 119, 74, 0.1); border: 1px solid var(--copper-1); border-radius: 16px; padding: 1rem; backdrop-filter: blur(10px); z-index: 50; overflow-y: auto; max-height: calc(100% - 40px); box-shadow: 0 10px 30px rgba(0,0,0,0.5);';
+            aiOverlay.innerHTML = `
+                <div style="color:var(--copper-1); font-weight:600; margin-bottom: 0.5rem; font-size:1.05rem;">✦ Conexões Profundas (IA)</div>
+                <div class="small-muted">O Llama 3.3 está lendo o ecossistema para sugerir parcerias inesperadas...</div>
+            `;
+            c.parentElement.appendChild(aiOverlay);
+
+            NebulaAI.findConnections(userProfile, communityProfiles).then(aiData => {
+                const overlay = document.getElementById('ai-connections-overlay');
+                if (!overlay) return;
+                
+                if (!aiData || !aiData.matches || aiData.matches.length === 0) {
+                    overlay.innerHTML = `
+                        <div style="color:var(--copper-1); font-weight:600; margin-bottom: 0.5rem;">✦ Conexões Profundas (IA)</div>
+                        <div class="small-muted">Nenhum match profundo encontrado no momento. Aumente seu acervo!</div>
+                    `;
+                    return;
+                }
+
+                let matchesHtml = aiData.matches.map(m => {
+                    const p = state.users[m.email] || {};
+                    const safeExpl = (m.explanation || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                    const firstName = (p.name || m.email).split(' ')[0];
+                    return `
+                        <div style="background:rgba(0,0,0,0.4); padding:0.8rem; border-radius:12px; margin-bottom:0.8rem; border:1px solid rgba(255,255,255,0.05);">
+                            <div style="display:flex; justify-content:space-between; margin-bottom:0.4rem;">
+                                <b style="color:var(--text-white); font-size:0.95rem;">${p.name || m.email}</b>
+                                <span class="tag tag-copper">${m.score}% Affinity</span>
+                            </div>
+                            <div style="font-size:0.85rem; color:var(--text-white-80); line-height:1.4; margin-bottom: 0.5rem;">
+                                ${m.explanation}
+                            </div>
+                            <button class="btn btn-sm btn-primary" style="width:100%; font-size:0.75rem; padding:0.3rem;" onclick="PageConnections.connectAI('${m.email}', '${firstName}', '${safeExpl}')">CONECTAR AGORA</button>
+                        </div>
+                    `;
+                }).join('');
+
+                overlay.innerHTML = `
+                    <div style="color:var(--copper-1); font-weight:600; margin-bottom: 0.5rem; font-size:1.05rem;">✦ Conexões Profundas (IA)</div>
+                    <p class="small-muted mb-1" style="font-size:0.8rem;">O Llama 3.3 descobriu estas afinidades analisando a sua pesquisa.</p>
+                    ${matchesHtml}
+                `;
+            });
+        }
+        // --- FIM DA INTEGRAÇÃO ---
 
         const data = NetworkEngine.buildConnectionChainNetwork(state, state.current_user, 10);
 
@@ -170,10 +244,20 @@ const PageConnections = (() => {
     }
 
     function switchTab(view, btnElement) {
+        const oldOverlay = document.getElementById('ai-connections-overlay');
+        if (oldOverlay) oldOverlay.remove();
         document.querySelectorAll('#net-tab-global, #net-tab-social').forEach(b => b.classList.remove('active'));
         btnElement.classList.add('active');
         loadView(view, NebulaApp.getState());
     }
 
-    return { render, switchTab };
+    function connectAI(emailTo, firstName, explanation) {
+        const state = NebulaApp.getState();
+        state.chat_target = emailTo;
+        state.chat_draft = `Olá ${firstName}! A Inteligência Artificial me recomendou seu perfil porque: "${explanation}". Gostaria de trocar uma ideia sobre nossas pesquisas?`;
+        state.page = 'Comunidade';
+        NebulaApp.renderApp();
+    }
+
+    return { render, switchTab, connectAI };
 })();

@@ -12,7 +12,7 @@ export default async function handler(req, res) {
         return res.status(405).json({ error: 'Method not allowed' });
     }
 
-    const { docs } = req.body;
+    const { docs, userResearch } = req.body;
 
     if (!docs || docs.length === 0) {
         return res.status(400).json({ error: 'No documents provided' });
@@ -35,7 +35,8 @@ Retorne APENAS um JSON válido com a exata estrutura:
 {
   "strengths": ["Ponto forte 1", "Ponto forte 2"],
   "weaknesses": ["Ponto fraco 1", "Ponto fraco 2"],
-  "suggestions": ["Sugestão 1", "Sugestão 2"]
+  "suggestions": ["Sugestão 1", "Sugestão 2"],
+  "deep_insight": "Um ou dois parágrafos profundos avaliando como o acervo do usuário está alinhado com a linha de pesquisa dele, apontando lacunas ou potenciais inovadores não óbvios."
 }
 
 REGRAS:
@@ -44,7 +45,7 @@ REGRAS:
 - Não invente informações, use apenas os dados enviados
 - Mínimo de 2 e máximo de 3 itens por categoria`;
 
-    const userPrompt = `Analise este acervo do pesquisador:\n\n${truncatedSummary}\n\nForneça o diagnóstico em JSON.`;
+    const userPrompt = `Linha de pesquisa do usuário: ${userResearch || 'Geral'}\n\nAcervo do pesquisador:\n\n${truncatedSummary}\n\nForneça o diagnóstico em JSON.`;
 
     try {
         const response = await fetch(GROQ_URL, {
@@ -92,7 +93,8 @@ REGRAS:
         return res.status(200).json({
             strengths: Array.isArray(result.strengths) ? result.strengths : [],
             weaknesses: Array.isArray(result.weaknesses) ? result.weaknesses : [],
-            suggestions: Array.isArray(result.suggestions) ? result.suggestions : []
+            suggestions: Array.isArray(result.suggestions) ? result.suggestions : [],
+            deep_insight: typeof result.deep_insight === 'string' ? result.deep_insight : null
         });
 
     } catch (err) {

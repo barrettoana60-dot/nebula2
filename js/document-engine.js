@@ -136,7 +136,7 @@ const DocumentEngine = (() => {
         });
     }
 
-    async function makeDocumentRecord(file, progressCallback) {
+    async function makeDocumentRecord(file, progressCallback, userResearch) {
         const fileName = file.name;
         const kind = fileKind(fileName);
         const suffix = fileName.split('.').pop()?.toLowerCase() || '';
@@ -165,7 +165,7 @@ const DocumentEngine = (() => {
         if (text && text.length >= 30 && typeof NebulaAI !== 'undefined') {
             if (progressCallback) progressCallback('Analisando com IA...');
             try {
-                aiData = await NebulaAI.analyzeDocument(text, fileName, kind);
+                aiData = await NebulaAI.analyzeDocument(text, fileName, kind, userResearch);
                 if (aiData) {
                     console.log('[DocumentEngine] AI analysis successful for:', fileName);
                 }
@@ -232,6 +232,7 @@ const DocumentEngine = (() => {
             document_type: docType,
             key_findings: keyFindings,
             methodology: methodology,
+            deep_insight: aiData ? aiData.deep_insight : null,
             ai_analyzed: !!aiData,
         };
     }

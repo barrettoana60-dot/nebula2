@@ -44,8 +44,10 @@ const PageAnalysis = (() => {
         `;
         container.innerHTML = html;
 
+        const userResearch = (state.current_user && state.users[state.current_user]) ? state.users[state.current_user].research : null;
+
         // Assincronamente buscar a revisão da IA (Llama 3.3)
-        NebulaAI.generateRepositoryReview(docs).then(aiReview => {
+        NebulaAI.generateRepositoryReview(docs, userResearch).then(aiReview => {
             const rxContainer = document.getElementById('raio-x-container');
             if (!rxContainer) return; // Mudou de tela
 
@@ -76,6 +78,11 @@ const PageAnalysis = (() => {
                             ${aiReview.suggestions.map(s => `<li style="margin-bottom:0.4rem">${s}</li>`).join('')}
                         </ul>
                     </div>
+                    ${aiReview.deep_insight ? `
+                    <div style="background:rgba(217,119,74,0.1); border:1px solid var(--copper-1); padding:1.2rem; border-radius:12px; grid-column: 1 / -1; margin-top: 0.5rem;">
+                        <div style="color:var(--copper-1); font-weight:600; margin-bottom:0.5rem; font-size: 1.1rem;">✦ Deep Insight (Conexão com sua Pesquisa)</div>
+                        <div style="font-size:0.95rem; color:var(--text-white); line-height: 1.6;">${aiReview.deep_insight.replace(/\\n/g, '<br>')}</div>
+                    </div>` : ''}
                 </div>
             `;
         });
