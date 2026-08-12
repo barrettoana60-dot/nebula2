@@ -67,7 +67,7 @@ const PageSearch = (() => {
         const email = state.current_user;
 
         if (window.NebulaSupabase && email) {
-            NebulaStorage.syncWorkspaceStateAsync(state, email).then(() => {
+            NebulaStorage.refreshCommunityDirectory(state).then(() => {
                 _renderSearchUI(container, NebulaApp.getState(), defaultQuery);
             }).catch(() => _renderSearchUI(container, state, defaultQuery));
             return;
@@ -141,25 +141,33 @@ const PageSearch = (() => {
         }
     }
 
-    function performUserSearch(query, state) {
+    async function performUserSearch(query, state) {
         const resContainer = document.getElementById('search-results-container');
         if (!resContainer) return;
 
-        const qLower = query.toLowerCase().trim();
+        resContainer.innerHTML = `<div class="spinner-overlay"><div class="spinner"></div><div style="text-align:center;margin-top:1rem;color:var(--text-white-60)">Buscando pesquisadores na comunidade...</div></div>`;
+
         const myEmail = (state.current_user || '').toLowerCase().trim();
-        const matches = NebulaStorage.searchResearchers(state, qLower, myEmail, 40);
+        let matches = [];
+        try {
+            matches = await NebulaStorage.searchResearchersAsync(state, query, myEmail, 50);
+        } catch (e) {
+            console.error('[Search] user search failed:', e);
+        }
+
+        const totalRegistered = Object.keys(state.users || {}).filter(e => !e.startsWith('demo_')).length;
 
         if (!matches.length) {
             resContainer.innerHTML = `<div class="glass" style="padding:2rem; text-align:center; color:var(--text-white-60);">
-                Nenhum pesquisador encontrado para "${query}".<br>
-                <span style="font-size:0.85rem;margin-top:0.5rem;display:block;">Verifique se o pesquisador já criou conta no Nebula. Total cadastrados: ${Object.keys(state.users || {}).filter(e => !e.startsWith('demo_') && e !== myEmail).length}</span>
+                Nenhum pesquisador encontrado para "${query || '(todos)'}".<br>
+                <span style="font-size:0.85rem;margin-top:0.5rem;display:block;">Total cadastrados na plataforma: ${totalRegistered}. Verifique se a conta foi criada com sucesso e tente buscar pelo e-mail.</span>
             </div>`;
             return;
         }
 
         resContainer.innerHTML = `
             <div class="glass mb-1">
-                <div class="section-title">Pesquisadores Encontrados (${matches.length})</div>
+                <div class="section-title">Pesquisadores Encontrados (${matches.length}) · ${totalRegistered} cadastrados</div>
                 <div style="margin-top:1rem;">
                     ${matches.map(m => renderUserCard(m.email, { name: m.name, research: m.research, photo: m.photo }, state.current_user, m.similarity, m.connection_points)).join('')}
                 </div>

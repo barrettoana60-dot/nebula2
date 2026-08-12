@@ -6,7 +6,7 @@ const PageConnections = (() => {
     function render(container, state) {
         try {
             if (window.NebulaSupabase && state.current_user) {
-                NebulaStorage.syncWorkspaceStateAsync(state, state.current_user).then(() => {
+                NebulaStorage.refreshCommunityDirectory(state).then(() => {
                     _render(container, NebulaApp.getState());
                 }).catch(() => _render(container, state));
             } else {
@@ -125,11 +125,13 @@ const PageConnections = (() => {
         }
 
         _renderAffinityPanel(connections, allResearchers);
-        document.getElementById('conn-search-input')?.addEventListener('input', e => {
+        document.getElementById('conn-search-input')?.addEventListener('input', async e => {
             const q = e.target.value.trim();
+            const list = document.getElementById('affinity-list');
+            if (list) list.innerHTML = `<div class="small-muted" style="padding:1rem;text-align:center;">Buscando...</div>`;
             const filtered = q
-                ? NebulaStorage.searchResearchers(state, q, myEmail, 50)
-                : connections;
+                ? await NebulaStorage.searchResearchersAsync(state, q, myEmail, 50)
+                : NetworkEngine.getAffinityConnections(NebulaApp.getState(), myEmail, 50);
             _renderAffinityPanel(filtered.length ? filtered : connections, allResearchers, q);
         });
         setTimeout(() => loadView(activeMapMode, state), 80);

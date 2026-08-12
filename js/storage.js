@@ -269,7 +269,8 @@ const NebulaStorage = (() => {
         saveState(state);
 
         if (state.current_user && window.NebulaSupabase) {
-            const email = state.current_user;
+            const email = (state.current_user || '').toLowerCase().trim();
+            state.current_user = email;
             const user = state.users[email];
             if (!user) return;
 
@@ -449,14 +450,132 @@ const NebulaStorage = (() => {
         return results;
     }
 
-    function searchResearchers(state, query, excludeEmail, limit = 30) {
+    async function fetchCommunityProfilesDirect() {
+        const cfg = window.NebulaSupabaseConfig;
+        if (!cfg) return [];
+        try {
+            const url = `${cfg.url}/rest/v1/profiles?select=email,name,research,photo,interest,tutorial_completed,pass&order=name.asc`;
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 8000);
+            const res = await fetch(url, {
+                headers: {
+                    'apikey': cfg.key,
+                    'Authorization': `Bearer ${cfg.key}`,
+                    'Content-Type': 'application/json'
+                },
+                signal: controller.signal
+            });
+            clearTimeout(timeout);
+            if (!res.ok) {
+                console.warn('[Storage] fetchCommunityProfilesDirect HTTP', res.status);
+                return [];
+            }
+            return await res.json();
+        } catch (e) {
+            console.warn('[Storage] fetchCommunityProfilesDirect failed:', e);
+            return [];
+        }
+    }
+
+    async function refreshCommunityDirectory(state) {
+        if (!state) return 0;
+        let profiles = [];
+
+        if (window.NebulaSupabase) {
+            try {
+                const { data, error } = await window.NebulaSupabase
+                    .from('profiles')
+                    .select('email, name, research, photo, interest, tutorial_completed, pass')
+                    .order('name', { ascending: true });
+                if (!error && data) profiles = data;
+            } catch (e) {
+                console.warn('[Storage] Supabase client profile fetch failed:', e);
+            }
+        }
+
+        if (!profiles.length) {
+            profiles = await fetchCommunityProfilesDirect();
+        }
+
+        if (!state.users) state.users = {};
+        if (!state.user_interest) state.user_interest = {};
+        if (!state.workspaces) state.workspaces = {};
+
+        profiles.forEach(p => {
+            const pKey = (p.email || '').toLowerCase().trim();
+            if (!pKey || pKey.startsWith('demo_')) return;
+            const dbPhoto = p.interest?._photo || p.photo || null;
+            state.users[pKey] = {
+                name: p.name || pKey,
+                research: p.research || '',
+                pass: state.users[pKey]?.pass || p.pass || '',
+                tutorial_completed: p.tutorial_completed,
+                photo: dbPhoto || state.users[pKey]?.photo || null
+            };
+            if (p.interest) {
+                const cleanInterest = { ...p.interest };
+                delete cleanInterest._photo;
+                state.user_interest[pKey] = { ...(state.user_interest[pKey] || {}), ...cleanInterest };
+            }
+            if (!state.workspaces[pKey]) state.workspaces[pKey] = blankWorkspace();
+        });
+
+        normalizeUserRegistry(state);
+        Object.keys(state.users).forEach(uKey => {
+            try { rebuildInterests(state, uKey); } catch (e) {}
+        });
+        saveState(state);
+        return profiles.length;
+    }
+
+    async function searchResearchersDirect(query) {
+        const q = (query || '').trim().replace(/[,()*]/g, '');
+        const cfg = window.NebulaSupabaseConfig;
+        if (!cfg || !q) return [];
+        try {
+            const safe = encodeURIComponent(q);
+            const url = `${cfg.url}/rest/v1/profiles?select=email,name,research,photo,interest,tutorial_completed,pass&or=(name.ilike.*${safe}*,research.ilike.*${safe}*,email.ilike.*${safe}*)&order=name.asc&limit=50`;
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 8000);
+            const res = await fetch(url, {
+                headers: {
+                    'apikey': cfg.key,
+                    'Authorization': `Bearer ${cfg.key}`,
+                    'Content-Type': 'application/json'
+                },
+                signal: controller.signal
+            });
+            clearTimeout(timeout);
+            if (!res.ok) {
+                const all = await fetchCommunityProfilesDirect();
+                const ql = q.toLowerCase();
+                return all.filter(p =>
+                    (p.name || '').toLowerCase().includes(ql) ||
+                    (p.research || '').toLowerCase().includes(ql) ||
+                    (p.email || '').toLowerCase().includes(ql)
+                );
+            }
+            return await res.json();
+        } catch (e) {
+            console.warn('[Storage] searchResearchersDirect failed:', e);
+            const all = await fetchCommunityProfilesDirect();
+            const ql = q.toLowerCase();
+            return all.filter(p =>
+                (p.name || '').toLowerCase().includes(ql) ||
+                (p.research || '').toLowerCase().includes(ql) ||
+                (p.email || '').toLowerCase().includes(ql)
+            );
+        }
+    }
+
+    function searchResearchersLocal(state, query, currentEmail, limit = 30) {
         const q = (query || '').toLowerCase().trim();
-        const exclude = (excludeEmail || '').toLowerCase().trim();
+        const myEmail = (currentEmail || '').toLowerCase().trim();
         const results = [];
 
         Object.entries(state.users || {}).forEach(([email, user]) => {
             const eKey = email.toLowerCase().trim();
-            if (!user || eKey === exclude || eKey.startsWith('demo_')) return;
+            if (!user || eKey.startsWith('demo_')) return;
 
             const name = (user.name || '').toLowerCase();
             const research = (user.research || '').toLowerCase();
@@ -464,7 +583,10 @@ const NebulaStorage = (() => {
             const haystack = `${name} ${research} ${eKey} ${interests}`;
 
             if (!q || haystack.includes(q)) {
-                const affinity = NetworkEngine.compareRepositories(state, exclude, eKey);
+                let affinity = { similarity: 0, shared_topics: [], connection_points: [], is_strong: false, is_medium: false };
+                if (myEmail && eKey !== myEmail) {
+                    try { affinity = NetworkEngine.compareRepositories(state, myEmail, eKey); } catch (e) {}
+                }
                 results.push({
                     email: eKey,
                     name: user.name || eKey,
@@ -475,12 +597,75 @@ const NebulaStorage = (() => {
                     connection_points: affinity.connection_points,
                     is_strong: affinity.is_strong,
                     is_medium: affinity.is_medium,
-                    topic: affinity.shared_topics[0] || 'Pesquisa Geral'
+                    topic: affinity.shared_topics?.[0] || 'Pesquisa Geral',
+                    is_self: eKey === myEmail
                 });
             }
         });
 
-        return results.sort((a, b) => b.similarity - a.similarity).slice(0, limit);
+        return results.sort((a, b) => {
+            if (a.is_self && !b.is_self) return -1;
+            if (!a.is_self && b.is_self) return 1;
+            return b.similarity - a.similarity;
+        }).slice(0, limit);
+    }
+
+    async function searchResearchersAsync(state, query, currentEmail, limit = 30) {
+        await refreshCommunityDirectory(state);
+
+        let results = searchResearchersLocal(state, query, currentEmail, limit);
+
+        const q = (query || '').trim();
+        if (q && results.length < 3) {
+            const cloudHits = await searchResearchersDirect(q);
+            cloudHits.forEach(p => {
+                const pKey = (p.email || '').toLowerCase().trim();
+                if (!pKey) return;
+                if (!state.users[pKey]) {
+                    state.users[pKey] = {
+                        name: p.name,
+                        research: p.research || '',
+                        pass: p.pass || '',
+                        photo: p.interest?._photo || p.photo || null
+                    };
+                }
+                if (!results.some(r => r.email === pKey)) {
+                    let affinity = { similarity: 0, shared_topics: [], connection_points: [], is_strong: false, is_medium: false };
+                    const myEmail = (currentEmail || '').toLowerCase().trim();
+                    if (myEmail && pKey !== myEmail) {
+                        try { affinity = NetworkEngine.compareRepositories(state, myEmail, pKey); } catch (e) {}
+                    }
+                    results.push({
+                        email: pKey,
+                        name: p.name || pKey,
+                        research: p.research || '',
+                        photo: p.interest?._photo || p.photo || null,
+                        similarity: affinity.similarity,
+                        shared_topics: affinity.shared_topics,
+                        connection_points: affinity.connection_points,
+                        is_strong: affinity.is_strong,
+                        is_medium: affinity.is_medium,
+                        topic: affinity.shared_topics?.[0] || 'Pesquisa Geral',
+                        is_self: pKey === myEmail
+                    });
+                }
+            });
+            saveState(state);
+        }
+
+        if (!q) {
+            results = searchResearchersLocal(state, '', currentEmail, limit);
+        }
+
+        return results.sort((a, b) => {
+            if (a.is_self && !b.is_self) return -1;
+            if (!a.is_self && b.is_self) return 1;
+            return b.similarity - a.similarity;
+        }).slice(0, limit);
+    }
+
+    function searchResearchers(state, query, excludeEmail, limit = 30) {
+        return searchResearchersLocal(state, query, excludeEmail, limit);
     }
 
     async function syncInboxFromSupabase(state, email) {
@@ -581,6 +766,10 @@ const NebulaStorage = (() => {
         setTypingIndicator,
         getTypingPeers,
         normalizeUserRegistry,
-        searchResearchers
+        searchResearchers,
+        refreshCommunityDirectory,
+        searchResearchersAsync,
+        searchResearchersLocal,
+        fetchCommunityProfilesDirect,
     };
 })();

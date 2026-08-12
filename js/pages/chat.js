@@ -220,13 +220,16 @@ const PageChat = (() => {
         return parts.length ? parts.join(' · ') : 'Pesquisador';
     }
 
-    function renderResearcherSearchResults(query) {
+    async function renderResearcherSearchResults(query) {
         const box = document.getElementById('chat-researcher-search-results');
         if (!box) return;
         const q = (query || '').trim();
         if (!q) { box.innerHTML = ''; box.style.display = 'none'; return; }
 
-        const results = NebulaStorage.searchResearchers(state, q, emailClean, 8);
+        box.innerHTML = `<div style="padding:0.6rem;font-size:0.8rem;color:var(--text-white-60);">Buscando...</div>`;
+        box.style.display = 'block';
+
+        const results = await NebulaStorage.searchResearchersAsync(state, q, emailClean, 8);
         if (!results.length) {
             box.innerHTML = `<div style="padding:0.6rem;font-size:0.8rem;color:var(--text-white-60);">Nenhum pesquisador encontrado.</div>`;
             box.style.display = 'block';
@@ -472,7 +475,7 @@ const PageChat = (() => {
         email = state.current_user;
         emailClean = (email || '').toLowerCase().trim();
 
-        await NebulaStorage.syncInboxFromSupabase(state, email);
+        await NebulaStorage.refreshCommunityDirectory(state);
         await NebulaStorage.syncWorkspaceStateAsync(state, email);
 
         rooms = getAvailableRooms(state, email);

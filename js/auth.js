@@ -428,6 +428,8 @@ const PageAuth = (() => {
                         search_history: [],
                         inbox: []
                     });
+                    const count = await NebulaStorage.refreshCommunityDirectory(state);
+                    console.log('[Auth] Perfil registrado. Pesquisadores na plataforma:', count);
                 }
             } catch(e) {
                 console.warn('[Auth] Async cloud save failed on register:', e);

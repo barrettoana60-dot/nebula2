@@ -4,24 +4,24 @@
 const supabaseUrl = 'https://jfpygtuihrljjlvljndj.supabase.co';
 const supabaseKey = 'sb_publishable_Bjnw8owLe0S2xhFR9euTng_O_MhjjKM';
 
+window.NebulaSupabaseConfig = { url: supabaseUrl, key: supabaseKey };
 window.NebulaSupabase = null;
 
 function initSupabaseClient() {
     if (window.supabase && !window.NebulaSupabase) {
         try {
-            // Usa o cliente Supabase apenas se houver resposta válida
             window.NebulaSupabase = window.supabase.createClient(supabaseUrl, supabaseKey, {
                 auth: { persistSession: false },
                 global: { fetch: (url, options) => {
                     const controller = new AbortController();
-                    const timeout = setTimeout(() => controller.abort(), 1800); // Fail fast em 1.8s para não travar a UI
+                    const timeout = setTimeout(() => controller.abort(), 5000);
                     return fetch(url, { ...options, signal: controller.signal })
                         .finally(() => clearTimeout(timeout));
                 }}
             });
-            console.log("[Supabase] Cliente seguro inicializado com timeout inteligente.");
+            console.log("[Supabase] Cliente inicializado (timeout 5s).");
         } catch (e) {
-            console.warn("[Supabase] Supabase indisponível, usando modo nativo Vercel/Local:", e);
+            console.warn("[Supabase] Supabase indisponível:", e);
         }
     }
 }

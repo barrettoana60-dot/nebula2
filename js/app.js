@@ -48,8 +48,10 @@ const NebulaApp = (() => {
         // Quietly fetch latest data from Supabase in background
         if (state.logged_in && state.current_user && !state.admin_mode) {
             NebulaAnalytics.trackPage(state.current_user, state.page || 'Tela Principal');
-            NebulaStorage.syncWorkspaceStateAsync(state, state.current_user).then(() => {
-                renderApp(); // Refresh all avatars, messages, and pages with cloud data
+            NebulaStorage.refreshCommunityDirectory(state).then(() => {
+                return NebulaStorage.syncWorkspaceStateAsync(state, state.current_user);
+            }).then(() => {
+                renderApp();
             }).catch(e => console.error("Auto-sync failed", e));
         }
     }

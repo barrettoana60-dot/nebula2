@@ -218,7 +218,10 @@ const NetworkEngine = (() => {
 
     function getConnectedUsers(state, email, limit = 50, minSimilarity = 0) {
         const key = resolveEmail(state, email);
-        if (!key || !state.users || !state.users[key]) return [];
+        if (!key || !state.users) return [];
+        if (!state.users[key]) {
+            state.users[key] = { name: key.split('@')[0], research: '', pass: '' };
+        }
         if (!state.user_interest) state.user_interest = {};
         if (!state.workspaces) state.workspaces = {};
 
