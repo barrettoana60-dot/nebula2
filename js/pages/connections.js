@@ -5,7 +5,13 @@ const PageConnections = (() => {
 
     function render(container, state) {
         try {
-            _render(container, state);
+            if (window.NebulaSupabase && state.current_user) {
+                NebulaStorage.syncWorkspaceStateAsync(state, state.current_user).then(() => {
+                    _render(container, NebulaApp.getState());
+                }).catch(() => _render(container, state));
+            } else {
+                _render(container, state);
+            }
         } catch (e) {
             console.error('[Connections] Render crash:', e);
             container.innerHTML = `<div style="padding:2rem;text-align:center;color:var(--text-white-60)">
@@ -24,7 +30,8 @@ const PageConnections = (() => {
         const userCount = Object.keys(state.users).filter(e => !e.startsWith('demo_')).length;
         const myEmail = state.current_user;
         const myFP = NetworkEngine.buildResearchFingerprint(state, myEmail);
-        const connections = NetworkEngine.getConnectedUsers(state, myEmail, 50);
+        const allResearchers = NetworkEngine.getAllCommunityUsers(state, myEmail, 100);
+        const connections = NetworkEngine.getAffinityConnections(state, myEmail, 50);
         const strongCount = connections.filter(c => c.is_strong).length;
 
         container.innerHTML = `
@@ -32,7 +39,7 @@ const PageConnections = (() => {
                 <div>
                     <div class="page-title">Ecossistema de Pesquisa</div>
                     <div style="font-size:0.85rem; color:var(--text-white-60);">
-                        ${userCount} pesquisadores · ${strongCount} afinidades fortes · rede acadêmica
+                        ${userCount} pesquisadores cadastrados · ${connections.length} com afinidade real · ${strongCount} fortes
                     </div>
                 </div>
                 <div style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center;">
@@ -49,12 +56,12 @@ const PageConnections = (() => {
 
             <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:0.75rem; margin-bottom:1rem;">
                 <div class="glass" style="padding:1rem; border-radius:16px; text-align:center;">
-                    <div style="font-size:1.8rem; font-weight:800; color:var(--color-blue);">${connections.length}</div>
-                    <div style="font-size:0.8rem; color:var(--text-white-60);">Pesquisadores na Rede</div>
+                    <div style="font-size:1.8rem; font-weight:800; color:var(--color-blue);">${allResearchers.length}</div>
+                    <div style="font-size:0.8rem; color:var(--text-white-60);">Pesquisadores Cadastrados</div>
                 </div>
                 <div class="glass" style="padding:1rem; border-radius:16px; text-align:center;">
-                    <div style="font-size:1.8rem; font-weight:800; color:#a78bfa;">${strongCount}</div>
-                    <div style="font-size:0.8rem; color:var(--text-white-60);">Afinidades Fortes</div>
+                    <div style="font-size:1.8rem; font-weight:800; color:#a78bfa;">${connections.length}</div>
+                    <div style="font-size:0.8rem; color:var(--text-white-60);">Com Afinidade Real</div>
                 </div>
                 <div class="glass" style="padding:1rem; border-radius:16px; text-align:center;">
                     <div style="font-size:1.8rem; font-weight:800; color:#fbbf24;">${myFP.topics.size}</div>
@@ -101,7 +108,9 @@ const PageConnections = (() => {
 
                 <div id="affinity-panel" style="display:flex; flex-direction:column; gap:0.75rem; max-height:600px; overflow-y:auto;">
                     <div class="glass" style="padding:1rem; border-radius:16px;">
-                        <div style="font-size:0.85rem; font-weight:700; color:var(--color-blue); margin-bottom:0.75rem;">Pesquisadores Conectados</div>
+                        <input type="text" id="conn-search-input" class="input" placeholder="Buscar pesquisador..." style="margin-bottom:0.75rem;font-size:0.85rem;padding:0.5rem 0.75rem;">
+                        <div style="font-size:0.85rem; font-weight:700; color:var(--color-blue); margin-bottom:0.75rem;">Pesquisadores com Afinidade</div>
+                        <div style="font-size:0.75rem;color:var(--text-white-60);margin-bottom:0.6rem;">Conexões baseadas em temas, artigos e análises em comum.</div>
                         <div id="affinity-list">
                             <div class="small-muted">Calculando afinidades...</div>
                         </div>
@@ -115,25 +124,35 @@ const PageConnections = (() => {
             grid.style.gridTemplateColumns = '1fr';
         }
 
-        _renderAffinityPanel(connections);
+        _renderAffinityPanel(connections, allResearchers);
+        document.getElementById('conn-search-input')?.addEventListener('input', e => {
+            const q = e.target.value.trim();
+            const filtered = q
+                ? NebulaStorage.searchResearchers(state, q, myEmail, 50)
+                : connections;
+            _renderAffinityPanel(filtered.length ? filtered : connections, allResearchers, q);
+        });
         setTimeout(() => loadView(activeMapMode, state), 80);
     }
 
-    function _renderAffinityPanel(connections) {
+    function _renderAffinityPanel(connections, allResearchers, searchQuery) {
         const list = document.getElementById('affinity-list');
         if (!list) return;
 
-        if (!connections.length) {
+        const toShow = connections.length ? connections : [];
+
+        if (!toShow.length) {
             list.innerHTML = `<div class="small-muted" style="text-align:center; padding:1rem;">
-                Nenhum pesquisador na plataforma ainda.
+                ${searchQuery ? `Nenhum resultado para "${searchQuery}".` : 'Nenhuma afinidade detectada ainda. Complete seu perfil e envie documentos no Repositório para encontrar pesquisadores com temas em comum.'}
+                ${allResearchers && allResearchers.length ? `<div style="margin-top:0.75rem;font-size:0.8rem;">${allResearchers.length} pesquisadores cadastrados na plataforma.</div>` : ''}
             </div>`;
             return;
         }
 
-        list.innerHTML = connections.slice(0, 15).map(conn => {
+        list.innerHTML = toShow.slice(0, 20).map(conn => {
             const initial = (conn.name || conn.email || '?').trim().charAt(0).toUpperCase();
-            const affinityColor = conn.similarity >= 50 ? '#10b981' : conn.similarity >= 35 ? '#fbbf24' : '#a78bfa';
-            const affinityLabel = conn.similarity >= 50 ? 'Afinidade Forte' : conn.similarity >= 35 ? 'Afinidade Média' : 'Comunidade';
+            const affinityColor = conn.similarity >= 55 ? '#10b981' : conn.similarity >= 30 ? '#fbbf24' : '#94a3b8';
+            const affinityLabel = conn.similarity >= 55 ? 'Afinidade Forte' : conn.similarity >= 30 ? 'Afinidade Média' : (conn.has_real_connection ? 'Afinidade Leve' : 'Cadastrado');
             const viewed = NebulaStorage.hasViewedProfile(NebulaApp.getState(), NebulaApp.getState().current_user, conn.email);
             const topicsHtml = (conn.shared_topics || []).slice(0, 2).map(t =>
                 `<span class="tag" style="font-size:0.65rem; padding:2px 6px;">${t}</span>`
@@ -167,7 +186,11 @@ const PageConnections = (() => {
                         <div style="height:100%; width:${conn.similarity}%; background:${affinityColor}; border-radius:2px; transition:width 0.6s ease;"></div>
                     </div>
                     ${topicsHtml ? `<div style="margin-bottom:0.35rem; display:flex; flex-wrap:wrap; gap:0.25rem;">${topicsHtml}</div>` : ''}
-                    ${connectionPointsHtml ? `<div style="line-height:1.6;">${connectionPointsHtml}</div>` : ''}
+                    ${connectionPointsHtml ? `<div style="line-height:1.6;margin-bottom:0.4rem;">${connectionPointsHtml}</div>` : ''}
+                    <div style="display:flex;gap:0.35rem;">
+                        <button class="btn btn-sm" style="flex:1;font-size:0.72rem;padding:0.3rem;" onclick="event.stopPropagation(); PageProfile.render(document.getElementById('pageContainer'), NebulaApp.getState(), '${conn.email}')">Perfil</button>
+                        <button class="btn btn-sm btn-primary" style="flex:1;font-size:0.72rem;padding:0.3rem;" onclick="event.stopPropagation(); NebulaApp.getState().chat_target='${conn.email}'; NebulaApp.navigate('Comunidade');">Mensagem</button>
+                    </div>
                 </div>`;
         }).join('');
     }
@@ -195,7 +218,7 @@ const PageConnections = (() => {
     async function loadAffinityView(c, state) {
         try {
             const userEmail = state.current_user;
-            const data = NetworkEngine.buildConnectionChainNetwork(state, userEmail, 20);
+            const data = NetworkEngine.buildConnectionChainNetwork(state, userEmail, 20, 15);
             c.innerHTML = '';
 
             if (!data || !data.nodes || !data.nodes.length) {
@@ -249,7 +272,7 @@ const PageConnections = (() => {
     async function loadCommunityView(c, state) {
         try {
             c.innerHTML = '';
-            const data = NetworkEngine.buildConnectionChainNetwork(state, state.current_user, 30);
+            const data = NetworkEngine.buildConnectionChainNetwork(state, state.current_user, 50, 0);
             if (!data || !data.nodes || !data.nodes.length) {
                 c.innerHTML = `<div style="padding:4rem; text-align:center; color:var(--text-white-60)">Nenhum integrante na comunidade.</div>`;
                 return;
@@ -297,7 +320,7 @@ const PageConnections = (() => {
                             document.getElementById('net-action-modal').style.display = 'none';
                             const st = NebulaApp.getState();
                             st.chat_target = emailTo;
-                            st.chat_draft = `Olá ${node.label.split(' ')[0]}! Vi seu perfil no Ecossistema 3D. Temos ${sim}% de match em pesquisa. Gostaria de conversar?`;
+                            st.chat_draft = `Olá ${node.label.split(' ')[0]}! Vi seu perfil no Ecossistema de Pesquisa${sim >= 15 ? ` — temos ${sim}% de afinidade` : ''}. Gostaria de conversar?`;
                             st.page = 'Comunidade';
                             NebulaApp.renderApp();
                         };

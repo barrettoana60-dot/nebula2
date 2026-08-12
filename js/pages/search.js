@@ -33,10 +33,16 @@ const PageSearch = (() => {
             </div>`;
     }
 
-    function renderUserCard(uEmail, userObj, currentEmail) {
-        const isSelf = uEmail === currentEmail;
+    function renderUserCard(uEmail, userObj, currentEmail, similarity, connectionPoints) {
+        const isSelf = (uEmail || '').toLowerCase() === (currentEmail || '').toLowerCase();
         const name = userObj.name || uEmail;
         const initial = name.trim().charAt(0).toUpperCase();
+        const affHtml = similarity >= 15
+            ? `<span class="tag tag-copper" style="font-size:0.65rem;margin-top:0.3rem;display:inline-block;">${similarity}% afinidade</span>`
+            : '';
+        const connHtml = (connectionPoints || []).slice(0, 2).map(cp =>
+            `<span class="tag" style="font-size:0.62rem;margin-top:0.2rem;display:inline-block;margin-right:0.2rem;">${cp.label}</span>`
+        ).join('');
         return `
             <div class="glass" style="display:flex; align-items:center; gap:1rem; padding:1rem; border-radius:16px; margin-bottom:0.75rem; flex-wrap:wrap;">
                 <div style="width:46px; height:46px; border-radius:50%; background:var(--color-blue); display:flex; align-items:center; justify-content:center; font-size:1.2rem; font-weight:700; color:#fff; overflow:hidden; flex-shrink:0;">
@@ -46,6 +52,7 @@ const PageSearch = (() => {
                     <div style="font-weight:700; font-size:1.05rem; color:var(--text-white);">${name} ${isSelf ? '<span class="tag" style="font-size:0.65rem;">Você</span>' : ''}</div>
                     <div style="font-size:0.8rem; color:var(--text-white-60);">@${uEmail.split('@')[0]}</div>
                     <div style="font-size:0.85rem; color:var(--text-white-80); margin-top:0.25rem;">${userObj.research || 'Pesquisa acadêmica geral'}</div>
+                    ${affHtml}${connHtml}
                 </div>
                 <div style="display:flex; gap:0.5rem;">
                     <button class="btn btn-sm btn-primary" onclick="PageProfile.render(document.getElementById('pageContainer'), NebulaApp.getState(), '${uEmail}')">VISITAR PERFIL</button>
@@ -59,6 +66,16 @@ const PageSearch = (() => {
         state.quick_query = '';
         const email = state.current_user;
 
+        if (window.NebulaSupabase && email) {
+            NebulaStorage.syncWorkspaceStateAsync(state, email).then(() => {
+                _renderSearchUI(container, NebulaApp.getState(), defaultQuery);
+            }).catch(() => _renderSearchUI(container, state, defaultQuery));
+            return;
+        }
+        _renderSearchUI(container, state, defaultQuery);
+    }
+
+    function _renderSearchUI(container, state, defaultQuery) {
         container.innerHTML = `
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem; flex-wrap:wrap; gap:1rem;">
                 <div>
@@ -129,20 +146,14 @@ const PageSearch = (() => {
         if (!resContainer) return;
 
         const qLower = query.toLowerCase().trim();
-        const users = state.users || {};
-        const matches = [];
-
-        Object.entries(users).forEach(([email, userObj]) => {
-            if (!userObj) return;
-            const name = (userObj.name || '').toLowerCase();
-            const research = (userObj.research || '').toLowerCase();
-            if (!qLower || name.includes(qLower) || email.toLowerCase().includes(qLower) || research.includes(qLower)) {
-                matches.push({ email, userObj });
-            }
-        });
+        const myEmail = (state.current_user || '').toLowerCase().trim();
+        const matches = NebulaStorage.searchResearchers(state, qLower, myEmail, 40);
 
         if (!matches.length) {
-            resContainer.innerHTML = `<div class="glass" style="padding:2rem; text-align:center; color:var(--text-white-60);">Nenhum pesquisador encontrado para "${query}".</div>`;
+            resContainer.innerHTML = `<div class="glass" style="padding:2rem; text-align:center; color:var(--text-white-60);">
+                Nenhum pesquisador encontrado para "${query}".<br>
+                <span style="font-size:0.85rem;margin-top:0.5rem;display:block;">Verifique se o pesquisador já criou conta no Nebula. Total cadastrados: ${Object.keys(state.users || {}).filter(e => !e.startsWith('demo_') && e !== myEmail).length}</span>
+            </div>`;
             return;
         }
 
@@ -150,7 +161,7 @@ const PageSearch = (() => {
             <div class="glass mb-1">
                 <div class="section-title">Pesquisadores Encontrados (${matches.length})</div>
                 <div style="margin-top:1rem;">
-                    ${matches.map(m => renderUserCard(m.email, m.userObj, state.current_user)).join('')}
+                    ${matches.map(m => renderUserCard(m.email, { name: m.name, research: m.research, photo: m.photo }, state.current_user, m.similarity, m.connection_points)).join('')}
                 </div>
             </div>
         `;

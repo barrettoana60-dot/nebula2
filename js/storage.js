@@ -59,6 +59,37 @@ const NebulaStorage = (() => {
 
     async function setEncryptionKey(password) {}
 
+    function normalizeUserRegistry(state) {
+        if (!state) return;
+        const normUsers = {};
+        Object.entries(state.users || {}).forEach(([email, user]) => {
+            const key = (email || '').toLowerCase().trim();
+            if (!key || key.startsWith('demo_')) return;
+            normUsers[key] = { ...(normUsers[key] || {}), ...user };
+        });
+        state.users = normUsers;
+
+        const normWs = {};
+        Object.entries(state.workspaces || {}).forEach(([email, ws]) => {
+            const key = (email || '').toLowerCase().trim();
+            if (!key) return;
+            normWs[key] = ws;
+        });
+        state.workspaces = normWs;
+
+        const normInterest = {};
+        Object.entries(state.user_interest || {}).forEach(([email, interest]) => {
+            const key = (email || '').toLowerCase().trim();
+            if (!key) return;
+            normInterest[key] = { ...(normInterest[key] || {}), ...interest };
+        });
+        state.user_interest = normInterest;
+
+        if (state.current_user) {
+            state.current_user = state.current_user.toLowerCase().trim();
+        }
+    }
+
     async function syncWorkspaceStateAsync(state, email) {
         if (!email) {
             state.repository = [];
@@ -66,38 +97,38 @@ const NebulaStorage = (() => {
             return;
         }
 
+        const emailKey = (email || '').toLowerCase().trim();
+
         if (window.NebulaSupabase) {
             try {
-                // 1. Perfil do usuário atual
                 const { data: myProfile } = await window.NebulaSupabase
-                    .from('profiles').select('*').eq('email', email).maybeSingle();
+                    .from('profiles').select('*').eq('email', emailKey).maybeSingle();
                 if (myProfile) {
-                    const localPhoto = (state.users[email] || {}).photo || null;
+                    const localPhoto = (state.users[emailKey] || {}).photo || null;
                     const dbPhoto = myProfile.interest?._photo || myProfile.photo || null;
-                    state.users[email] = {
+                    state.users[emailKey] = {
                         name: myProfile.name,
                         research: myProfile.research,
-                        pass: myProfile.pass,
+                        pass: myProfile.pass || state.users[emailKey]?.pass || '',
                         tutorial_completed: myProfile.tutorial_completed,
                         photo: dbPhoto || localPhoto
                     };
                     if (!state.user_interest) state.user_interest = {};
                     const cleanInterest = { ...(myProfile.interest || {}) };
                     delete cleanInterest._photo;
-                    state.user_interest[email] = cleanInterest;
+                    state.user_interest[emailKey] = cleanInterest;
                 }
 
-                // 2. Workspace do usuário atual
                 const { data: myWs } = await window.NebulaSupabase
                     .from('workspaces').select('email, repository, search_history, inbox')
-                    .eq('email', email).maybeSingle();
+                    .eq('email', emailKey).maybeSingle();
                 if (myWs) {
                     if (!state.workspaces) state.workspaces = {};
-                    state.workspaces[email] = {
+                    state.workspaces[emailKey] = {
                         repository: myWs.repository || [],
                         search_history: myWs.search_history || []
                     };
-                    if (myWs.inbox && Array.from) {
+                    if (myWs.inbox && Array.isArray(myWs.inbox)) {
                         const existingLocal = state.community_messages || [];
                         const combinedMap = new Map();
                         [...myWs.inbox, ...existingLocal].forEach(m => {
@@ -107,17 +138,18 @@ const NebulaStorage = (() => {
                     }
                 }
 
-                // 3. Busca TODOS os perfis da comunidade
                 const { data: allProfiles } = await window.NebulaSupabase
-                    .from('profiles').select('email, name, research, photo, interest, tutorial_completed');
+                    .from('profiles').select('email, name, research, photo, interest, tutorial_completed, pass');
                 if (allProfiles) {
                     allProfiles.forEach(p => {
-                        const localPhoto = (state.users[p.email] || {}).photo || null;
+                        const pKey = (p.email || '').toLowerCase().trim();
+                        if (!pKey || pKey.startsWith('demo_')) return;
+                        const localPhoto = (state.users[pKey] || {}).photo || null;
                         const dbPhoto = p.interest?._photo || p.photo || null;
-                        state.users[p.email] = {
+                        state.users[pKey] = {
                             name: p.name,
-                            research: p.research,
-                            pass: state.users[p.email]?.pass || p.pass || '',
+                            research: p.research || '',
+                            pass: state.users[pKey]?.pass || p.pass || '',
                             tutorial_completed: p.tutorial_completed,
                             photo: dbPhoto || localPhoto
                         };
@@ -125,34 +157,35 @@ const NebulaStorage = (() => {
                             if (!state.user_interest) state.user_interest = {};
                             const cleanInterest = { ...p.interest };
                             delete cleanInterest._photo;
-                            state.user_interest[p.email] = cleanInterest;
+                            state.user_interest[pKey] = cleanInterest;
                         }
-                        rebuildInterests(state, p.email);
                     });
                 }
 
-                // 4. Busca workspaces da comunidade
                 const { data: allWorkspaces } = await window.NebulaSupabase
                     .from('workspaces').select('email, repository');
                 if (allWorkspaces) {
                     allWorkspaces.forEach(w => {
+                        const wKey = (w.email || '').toLowerCase().trim();
+                        if (!wKey) return;
                         if (!state.workspaces) state.workspaces = {};
-                        if (!state.workspaces[w.email]) {
-                            state.workspaces[w.email] = blankWorkspace();
-                        }
-                        state.workspaces[w.email].repository = w.repository || [];
-                        rebuildInterests(state, w.email);
+                        if (!state.workspaces[wKey]) state.workspaces[wKey] = blankWorkspace();
+                        state.workspaces[wKey].repository = w.repository || [];
                     });
                 }
+
+                Object.keys(state.users).forEach(uKey => rebuildInterests(state, uKey));
             } catch (err) {
                 console.error("Supabase sync failed, using local cache:", err);
             }
         }
 
-        if (!state.workspaces) state.workspaces = {};
-        if (!state.workspaces[email]) state.workspaces[email] = blankWorkspace();
+        normalizeUserRegistry(state);
 
-        const ws = state.workspaces[email] || blankWorkspace();
+        if (!state.workspaces) state.workspaces = {};
+        if (!state.workspaces[emailKey]) state.workspaces[emailKey] = blankWorkspace();
+
+        const ws = state.workspaces[emailKey] || blankWorkspace();
         state.repository = JSON.parse(JSON.stringify(ws.repository || []));
         state.search_history = [...(ws.search_history || [])];
 
@@ -380,9 +413,11 @@ const NebulaStorage = (() => {
         }
     }
 
-    async function fetchMessagesFromSupabase(roomId, email) {
+    async function fetchMessagesFromSupabase(roomId, email, peerEmail) {
         if (!window.NebulaSupabase) return [];
         const results = [];
+        const cleanMine = (email || '').toLowerCase().trim();
+        const cleanPeer = (peerEmail || '').toLowerCase().trim();
         try {
             if (roomId) {
                 const { data } = await window.NebulaSupabase
@@ -393,19 +428,59 @@ const NebulaStorage = (() => {
                     .limit(200);
                 if (data) results.push(...data);
             }
-            if (email) {
-                const clean = (email || '').toLowerCase().trim();
+            if (email && peerEmail) {
                 const { data: ws } = await window.NebulaSupabase
                     .from('workspaces')
                     .select('inbox')
-                    .eq('email', clean)
+                    .eq('email', cleanMine)
                     .maybeSingle();
-                if (ws?.inbox) results.push(...ws.inbox);
+                if (ws?.inbox) {
+                    const filtered = ws.inbox.filter(m => {
+                        const s = (m.sender_email || '').toLowerCase().trim();
+                        const r = (m.recipient_email || '').toLowerCase().trim();
+                        return (s === cleanPeer && r === cleanMine) || (s === cleanMine && r === cleanPeer);
+                    });
+                    results.push(...filtered);
+                }
             }
         } catch (e) {
             console.warn('[Storage] fetchMessagesFromSupabase failed:', e);
         }
         return results;
+    }
+
+    function searchResearchers(state, query, excludeEmail, limit = 30) {
+        const q = (query || '').toLowerCase().trim();
+        const exclude = (excludeEmail || '').toLowerCase().trim();
+        const results = [];
+
+        Object.entries(state.users || {}).forEach(([email, user]) => {
+            const eKey = email.toLowerCase().trim();
+            if (!user || eKey === exclude || eKey.startsWith('demo_')) return;
+
+            const name = (user.name || '').toLowerCase();
+            const research = (user.research || '').toLowerCase();
+            const interests = Object.keys(state.user_interest[eKey] || {}).join(' ').toLowerCase();
+            const haystack = `${name} ${research} ${eKey} ${interests}`;
+
+            if (!q || haystack.includes(q)) {
+                const affinity = NetworkEngine.compareRepositories(state, exclude, eKey);
+                results.push({
+                    email: eKey,
+                    name: user.name || eKey,
+                    research: user.research || '',
+                    photo: user.photo || null,
+                    similarity: affinity.similarity,
+                    shared_topics: affinity.shared_topics,
+                    connection_points: affinity.connection_points,
+                    is_strong: affinity.is_strong,
+                    is_medium: affinity.is_medium,
+                    topic: affinity.shared_topics[0] || 'Pesquisa Geral'
+                });
+            }
+        });
+
+        return results.sort((a, b) => b.similarity - a.similarity).slice(0, limit);
     }
 
     async function syncInboxFromSupabase(state, email) {
@@ -504,6 +579,8 @@ const NebulaStorage = (() => {
         recordProfileView,
         hasViewedProfile,
         setTypingIndicator,
-        getTypingPeers
+        getTypingPeers,
+        normalizeUserRegistry,
+        searchResearchers
     };
 })();

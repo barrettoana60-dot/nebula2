@@ -56,27 +56,30 @@ const NetworkEngine = (() => {
     }
 
     /* ── Construção de Fingerprint de Pesquisa ── */
+    function resolveEmail(state, email) {
+        return NebulaStorage.findUserKey(state, email) || (email || '').toLowerCase().trim();
+    }
+
     function buildResearchFingerprint(state, email) {
-        const user = state.users[email] || {};
-        const ws = state.workspaces[email] || {};
+        const key = resolveEmail(state, email);
+        const user = state.users[key] || {};
+        const ws = state.workspaces[key] || {};
         const docs = ws.repository || [];
-        const interests = state.user_interest[email] || {};
+        const interests = state.user_interest[key] || {};
 
-        const researchText = [
-            user.research || '',
-            user.formation || '',
-            user.institution || '',
-            Object.keys(interests).join(' '),
-        ].join(' ').trim();
-
+        const textParts = [user.research || '', user.formation || '', user.institution || ''];
         const repoKeywords = new Set();
         const repoTopics = new Set();
         const repoAuthors = new Set();
         const repoTitlesNorm = new Set();
+        const repoSummaries = [];
 
         docs.forEach(doc => {
-            if (doc.topic) repoTopics.add(doc.topic);
-            (doc.keywords || []).forEach(k => repoKeywords.add(k.toLowerCase().trim()));
+            if (doc.topic) repoTopics.add(doc.topic.toLowerCase().trim());
+            (doc.keywords || []).forEach(k => repoKeywords.add(String(k).toLowerCase().trim()));
+            if (doc.summary) repoSummaries.push(doc.summary.slice(0, 400));
+            if (doc.key_findings) repoSummaries.push(doc.key_findings.slice(0, 200));
+            if (doc.methodology) repoKeywords.add(String(doc.methodology).toLowerCase().trim());
             if (doc.author) {
                 doc.author.split(/[,;&]/).forEach(a => {
                     const an = a.trim().toLowerCase();
@@ -86,12 +89,24 @@ const NetworkEngine = (() => {
             if (doc.name) repoTitlesNorm.add(doc.name.toLowerCase().trim());
         });
 
-        const primaryTopic = TextEngine.detectTopic(user.research || '');
-        if (primaryTopic && primaryTopic !== 'Pesquisa Geral') repoTopics.add(primaryTopic);
+        textParts.push(repoSummaries.join(' '));
+        textParts.push(Object.keys(interests).join(' '));
+
+        let researchKw = [];
+        try {
+            if (user.research && typeof TextEngine !== 'undefined') {
+                researchKw = TextEngine.extractKeywordsTFIDF(user.research, 20);
+                researchKw.forEach(k => repoKeywords.add(k.toLowerCase().trim()));
+            }
+        } catch (e) {}
+
+        const researchText = textParts.join(' ').trim();
+        const primaryTopic = TextEngine.detectTopic(user.research || researchText);
+        if (primaryTopic && primaryTopic !== 'Pesquisa Geral') repoTopics.add(primaryTopic.toLowerCase());
 
         return {
-            email,
-            name: user.name || email,
+            email: key,
+            name: user.name || key,
             research: user.research || '',
             researchText,
             keywords: repoKeywords,
@@ -103,91 +118,85 @@ const NetworkEngine = (() => {
             area: primaryTopic,
             interestTerms: Object.keys(interests).map(k => k.toLowerCase()),
             docCount: docs.length,
+            researchKw
         };
     }
 
-    /* ── Algoritmo 100% Simétrico de Comparação (Match) ── */
     function compareFingerprints(fpA, fpB) {
-        // Ordenação simétrica: garante f(A,B) == f(B,A) independente de quem chama
         let sim = 0;
         const sharedTopics = [];
         const sharedKeywords = [];
-        const sharedArticles = [];
+        const connectionPoints = [];
 
-        // 1. Cosine similarity da pesquisa (simétrica)
         const textSim = TextEngine.cosineSimilarity(fpA.researchText, fpB.researchText);
-        if (textSim > 0.05) {
-            sim += textSim * 40;
-        }
+        if (textSim > 0.08) sim += Math.round(textSim * 50);
 
-        // 2. Sobreposição de Tópicos (simétrica)
         fpA.topics.forEach(t => {
-            if (fpB.topics.has(t)) {
+            if (fpB.topics.has(t) && t.length > 2) {
                 sharedTopics.push(t);
-                sim += 18;
+                sim += 20;
             }
         });
 
-        // 3. Sobreposição de Keywords / Termos de Interesse (simétrica)
+        let kwOverlap = 0;
         fpA.keywords.forEach(k => {
-            if (fpB.keywords.has(k) && k.length > 3) {
+            if (k.length > 3 && fpB.keywords.has(k)) {
                 sharedKeywords.push(k);
-                sim += 6;
+                kwOverlap++;
+                sim += 8;
             }
         });
         fpA.interestTerms.forEach(t => {
-            if (fpB.interestTerms.includes(t) && !sharedKeywords.includes(t)) {
+            if (t.length > 3 && (fpB.interestTerms.includes(t) || fpB.keywords.has(t)) && !sharedKeywords.includes(t)) {
                 sharedKeywords.push(t);
-                sim += 5;
+                kwOverlap++;
+                sim += 6;
             }
         });
 
-        // 4. Artigos em Comum (simétrica)
         let sameArticles = 0;
         fpA.titles.forEach(t => {
             if (fpB.titles.has(t)) {
                 sameArticles++;
-                sharedArticles.push(t);
-                sim += 35;
+                sim += 40;
             }
         });
 
-        // 5. Co-autores em comum (simétrica)
         let sameAuthors = 0;
-        fpA.authors.forEach(a => {
-            if (fpB.authors.has(a)) sameAuthors++;
-        });
-        if (sameAuthors > 0) sim += sameAuthors * 10;
+        fpA.authors.forEach(a => { if (fpB.authors.has(a)) sameAuthors++; });
+        if (sameAuthors > 0) sim += sameAuthors * 12;
 
-        // 6. Mesma região/país (simétrica)
-        if (fpA.country && fpB.country && fpA.country !== 'Desconhecido' && fpA.country === fpB.country) {
-            sim += 5;
+        if (fpA.area && fpB.area && fpA.area === fpB.area && fpA.area !== 'Pesquisa Geral') {
+            if (!sharedTopics.includes(fpA.area.toLowerCase())) sharedTopics.push(fpA.area);
+            sim += 15;
         }
 
-        // Mesma área principal de pesquisa
-        if (fpA.area && fpB.area && fpA.area === fpB.area && !sharedTopics.includes(fpA.area)) {
-            sharedTopics.push(fpA.area);
-            sim += 12;
+        if (fpA.docCount > 0 && fpB.docCount > 0 && sharedTopics.length === 0 && kwOverlap === 0 && textSim < 0.05) {
+            sim = Math.min(sim, 5);
         }
 
-        // Afinidade real — sem baseline artificial
         const finalSim = Math.min(Math.max(Math.round(sim), 0), 99);
 
-        // Pontos de conexão para exibição no card
-        const connectionPoints = [];
-        sharedTopics.slice(0, 3).forEach(t => connectionPoints.push({ type: 'topic', label: t }));
-        sharedKeywords.slice(0, 4).forEach(k => connectionPoints.push({ type: 'keyword', label: k }));
+        sharedTopics.slice(0, 3).forEach(t => {
+            const label = t.charAt(0).toUpperCase() + t.slice(1);
+            connectionPoints.push({ type: 'topic', label });
+        });
+        sharedKeywords.slice(0, 3).forEach(k => connectionPoints.push({ type: 'keyword', label: k }));
         if (sameArticles > 0) connectionPoints.push({ type: 'article', label: `${sameArticles} artigo(s) em comum` });
         if (sameAuthors > 0) connectionPoints.push({ type: 'author', label: `${sameAuthors} co-autor(es) em comum` });
-        if (fpA.country && fpA.country === fpB.country) connectionPoints.push({ type: 'geo', label: fpA.country });
+
+        const realSharedTopics = sharedTopics.length
+            ? sharedTopics.map(t => t.charAt(0).toUpperCase() + t.slice(1))
+            : (finalSim >= 15 ? [fpB.area || 'Área relacionada'] : []);
 
         return {
             similarity: finalSim,
-            shared_topics: sharedTopics.length ? sharedTopics : [fpB.area || 'Pesquisa Científica'],
+            shared_topics: realSharedTopics,
             shared_terms: sharedKeywords,
             connection_points: connectionPoints,
-            is_strong: finalSim >= 50,
-            is_medium: finalSim >= 35 && finalSim < 50,
+            is_strong: finalSim >= 55,
+            is_medium: finalSim >= 30 && finalSim < 55,
+            has_real_connection: finalSim >= 15 || sameArticles > 0 || kwOverlap >= 2
         };
     }
 
@@ -196,78 +205,75 @@ const NetworkEngine = (() => {
         if (!state.workspaces) state.workspaces = {};
         if (!state.users) state.users = {};
 
-        try { NebulaStorage.rebuildInterests(state, baseEmail); } catch(e) {}
-        try { NebulaStorage.rebuildInterests(state, otherEmail); } catch(e) {}
+        const baseKey = resolveEmail(state, baseEmail);
+        const otherKey = resolveEmail(state, otherEmail);
+        try { NebulaStorage.rebuildInterests(state, baseKey); } catch(e) {}
+        try { NebulaStorage.rebuildInterests(state, otherKey); } catch(e) {}
 
-        const fpBase = buildResearchFingerprint(state, baseEmail);
-        const fpOther = buildResearchFingerprint(state, otherEmail);
-
-        return compareFingerprints(fpBase, fpOther);
+        return compareFingerprints(
+            buildResearchFingerprint(state, baseKey),
+            buildResearchFingerprint(state, otherKey)
+        );
     }
 
-    /* ── Retorna TODOS os usuários cadastrados com afinidade simétrica ── */
-    function getConnectedUsers(state, email, limit = 50) {
-        if (!email || !state.users || !state.users[email]) return [];
+    function getConnectedUsers(state, email, limit = 50, minSimilarity = 0) {
+        const key = resolveEmail(state, email);
+        if (!key || !state.users || !state.users[key]) return [];
         if (!state.user_interest) state.user_interest = {};
         if (!state.workspaces) state.workspaces = {};
 
-        const fpBase = buildResearchFingerprint(state, email);
+        const fpBase = buildResearchFingerprint(state, key);
         const out = [];
 
         for (const [other, otherUser] of Object.entries(state.users)) {
-            if (other === email || !otherUser || other.startsWith('demo_')) continue;
+            const otherKey = other.toLowerCase().trim();
+            if (otherKey === key || !otherUser || otherKey.startsWith('demo_')) continue;
             try {
-                const fpOther = buildResearchFingerprint(state, other);
+                const fpOther = buildResearchFingerprint(state, otherKey);
                 const comp = compareFingerprints(fpBase, fpOther);
+                if (comp.similarity < minSimilarity) continue;
 
                 out.push({
-                    email: other,
-                    name: otherUser.name || other,
+                    email: otherKey,
+                    name: otherUser.name || otherKey,
                     research: otherUser.research || '',
                     photo: otherUser.photo || null,
-                    topic: fpOther.area || 'Pesquisa Científica',
+                    topic: fpOther.area || 'Pesquisa Geral',
                     shared_topics: comp.shared_topics,
                     shared_terms: comp.shared_terms,
                     connection_points: comp.connection_points,
                     similarity: comp.similarity,
                     is_strong: comp.is_strong,
                     is_medium: comp.is_medium,
+                    has_real_connection: comp.has_real_connection
                 });
             } catch (innerErr) {
-                console.warn('[NetworkEngine] compare failed for', other, innerErr);
-                out.push({
-                    email: other,
-                    name: otherUser.name || other,
-                    research: otherUser.research || '',
-                    photo: otherUser.photo || null,
-                    topic: 'Pesquisa Científica',
-                    shared_topics: ['Pesquisa Científica'],
-                    shared_terms: [],
-                    connection_points: [],
-                    similarity: 0,
-                    is_strong: false,
-                    is_medium: false,
-                });
+                console.warn('[NetworkEngine] compare failed for', otherKey, innerErr);
             }
         }
 
         return out.sort((a, b) => b.similarity - a.similarity).slice(0, limit);
     }
 
-    function getAllUsersWithAffinity(state, email) {
-        return getConnectedUsers(state, email, 100);
+    function getAllCommunityUsers(state, email, limit = 100) {
+        return getConnectedUsers(state, email, limit, 0);
     }
 
-    function buildConnectionChainNetwork(state, email, limitUsers) {
-        const user = state.users[email] || {};
-        const connections = getConnectedUsers(state, email, limitUsers);
+    function getAffinityConnections(state, email, limit = 50) {
+        return getConnectedUsers(state, email, limit, 15);
+    }
+
+    function buildConnectionChainNetwork(state, email, limitUsers, minSimilarity = 15) {
+        const key = resolveEmail(state, email);
+        const user = state.users[key] || {};
+        const connections = getConnectedUsers(state, key, limitUsers, minSimilarity);
 
         if (!connections.length) return { nodes: [], edges: [] };
 
-        const userFP = buildResearchFingerprint(state, email);
+        const userFP = buildResearchFingerprint(state, key);
 
         const nodes = [{
-            id: `user::${email}`,
+            id: `user::${key}`,
             label: (user.name || email).slice(0, 28),
             type: 'user',
             topic: userFP.area || 'Pesquisa Geral',
@@ -475,10 +481,13 @@ const NetworkEngine = (() => {
         buildConnectionChainNetwork,
         render3DNetwork,
         getConnectedUsers,
-        getAllUsersWithAffinity,
+        getAllCommunityUsers,
+        getAffinityConnections,
+        getAllUsersWithAffinity: getAllCommunityUsers,
         compareRepositories,
         buildResearchFingerprint,
         compareFingerprints,
+        resolveEmail,
     };
 })();
 

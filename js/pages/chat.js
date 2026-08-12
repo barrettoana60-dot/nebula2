@@ -18,9 +18,13 @@ const PageChat = (() => {
         return `direct::${(h >>> 0).toString(16)}`;
     }
 
+    function chatStoreKey(userEmail) {
+        return 'nebula_chat_store_v3_' + (userEmail || '').toLowerCase().trim();
+    }
+
     function getStoredMessages() {
         try {
-            return JSON.parse(localStorage.getItem('nebula_chat_store_v2') || '[]');
+            return JSON.parse(localStorage.getItem(chatStoreKey(emailClean || email)) || '[]');
         } catch (e) {
             return [];
         }
@@ -28,10 +32,21 @@ const PageChat = (() => {
 
     function saveStoredMessages(msgs) {
         try {
-            localStorage.setItem('nebula_chat_store_v2', JSON.stringify(msgs.slice(-1000)));
+            localStorage.setItem(chatStoreKey(emailClean || email), JSON.stringify(msgs.slice(-500)));
         } catch (e) {
             console.warn('[ChatStore] Erro ao salvar cache:', e);
         }
+    }
+
+    function messageBelongsToRoom(m, targetRoomId, cleanMine, cleanPeer, isAi) {
+        if (!m || !m.text) return false;
+        const s = (m.sender_email || '').toLowerCase().trim();
+        const r = (m.recipient_email || '').toLowerCase().trim();
+        if (isAi) {
+            return m.room_id?.startsWith('ai::') || s === 'ai@nebula' || s === 'ai';
+        }
+        if (m.room_id && m.room_id === targetRoomId) return true;
+        return (s === cleanPeer && r === cleanMine) || (s === cleanMine && r === cleanPeer);
     }
 
     function collectPeersFromMessages(stateObj, myEmailClean) {
@@ -61,52 +76,44 @@ const PageChat = (() => {
         const myEmailClean = (userEmail || '').toLowerCase().trim();
         const knownPeers = new Map();
 
-        Object.entries(stateObj.users || {}).forEach(([pEmail, pObj]) => {
-            const cleanP = (pEmail || '').toLowerCase().trim();
-            if (cleanP !== myEmailClean && !cleanP.startsWith('demo_') && pObj) {
-                knownPeers.set(cleanP, {
-                    name: pObj.name || pEmail,
-                    email: pEmail,
-                    shared_topics: ['Pesquisa Científica'],
-                    similarity: 0
-                });
-            }
+        collectPeersFromMessages(stateObj, myEmailClean).forEach((name, peerEmail) => {
+            const userKey = (NebulaStorage.findUserKey(stateObj, peerEmail) || peerEmail).toLowerCase().trim();
+            const userObj = stateObj.users[userKey] || {};
+            knownPeers.set(userKey, {
+                name: userObj.name || name || userKey,
+                email: userKey,
+                shared_topics: [],
+                similarity: 0,
+                hasMessages: true
+            });
         });
 
-        const conns = getConnectedUsers(stateObj, userEmail, 50);
+        const conns = NetworkEngine.getAffinityConnections(stateObj, userEmail, 20);
         conns.forEach(c => {
             const cleanC = (c.email || '').toLowerCase().trim();
             if (cleanC !== myEmailClean) {
+                const existing = knownPeers.get(cleanC);
                 knownPeers.set(cleanC, {
                     name: c.name || c.email,
-                    email: c.email,
-                    shared_topics: c.shared_topics || ['Pesquisa Científica'],
-                    similarity: c.similarity || 0
+                    email: cleanC,
+                    shared_topics: c.shared_topics || [],
+                    similarity: c.similarity || 0,
+                    hasMessages: existing?.hasMessages || false
                 });
             }
         });
 
-        collectPeersFromMessages(stateObj, myEmailClean).forEach((name, peerEmail) => {
-            if (!knownPeers.has(peerEmail)) {
-                const userKey = NebulaStorage.findUserKey(stateObj, peerEmail);
-                const userObj = userKey ? stateObj.users[userKey] : null;
-                knownPeers.set(peerEmail, {
-                    name: userObj?.name || name || peerEmail,
-                    email: userKey || peerEmail,
-                    shared_topics: ['Pesquisa Científica'],
-                    similarity: 0
-                });
-            }
+        const sortedPeers = Array.from(knownPeers.values()).sort((a, b) => {
+            if (a.hasMessages && !b.hasMessages) return -1;
+            if (!a.hasMessages && b.hasMessages) return 1;
+            return (b.similarity || 0) - (a.similarity || 0);
         });
-
-        const sortedPeers = Array.from(knownPeers.values()).sort((a, b) => (b.similarity || 0) - (a.similarity || 0));
 
         sortedPeers.forEach(peerData => {
-            const peerEmail = peerData.email;
             list.push({
-                id: buildRoomId(myEmailClean, peerEmail),
+                id: buildRoomId(myEmailClean, peerData.email),
                 label: peerData.name,
-                peer: peerEmail,
+                peer: peerData.email,
                 kind: 'direct',
                 shared_topics: peerData.shared_topics,
                 similarity: peerData.similarity || 0,
@@ -158,27 +165,13 @@ const PageChat = (() => {
 
         let allMsgs = [];
 
-        const localStore = getStoredMessages();
-        const matchedLocal = localStore.filter(m =>
-            m.room_id === targetRoomId ||
-            (isAi && (m.room_id?.startsWith('ai::') || m.sender_email === 'ai@nebula')) ||
-            (!isAi && (
-                (m.sender_email?.toLowerCase() === cleanPeer && m.recipient_email?.toLowerCase() === cleanMine) ||
-                (m.sender_email?.toLowerCase() === cleanMine && m.recipient_email?.toLowerCase() === cleanPeer)
-            ))
-        );
-        allMsgs.push(...matchedLocal);
+        getStoredMessages().forEach(m => {
+            if (messageBelongsToRoom(m, targetRoomId, cleanMine, cleanPeer, isAi)) allMsgs.push(m);
+        });
 
-        if (state.community_messages) {
-            const fromState = state.community_messages.filter(m =>
-                m.room_id === targetRoomId ||
-                (!isAi && (
-                    (m.sender_email?.toLowerCase() === cleanPeer && m.recipient_email?.toLowerCase() === cleanMine) ||
-                    (m.sender_email?.toLowerCase() === cleanMine && m.recipient_email?.toLowerCase() === cleanPeer)
-                ))
-            );
-            allMsgs.push(...fromState);
-        }
+        (state.community_messages || []).forEach(m => {
+            if (messageBelongsToRoom(m, targetRoomId, cleanMine, cleanPeer, isAi)) allMsgs.push(m);
+        });
 
         if (!isAi) {
             try {
@@ -188,13 +181,17 @@ const PageChat = (() => {
                 clearTimeout(timeout);
                 if (res.ok) {
                     const data = await res.json();
-                    if (data?.messages?.length) allMsgs.push(...data.messages);
+                    (data?.messages || []).forEach(m => {
+                        if (messageBelongsToRoom(m, targetRoomId, cleanMine, cleanPeer, false)) allMsgs.push(m);
+                    });
                 }
             } catch (e) {}
 
             try {
-                const cloudMsgs = await NebulaStorage.fetchMessagesFromSupabase(targetRoomId, cleanMine);
-                allMsgs.push(...cloudMsgs);
+                const cloudMsgs = await NebulaStorage.fetchMessagesFromSupabase(targetRoomId, cleanMine, cleanPeer);
+                cloudMsgs.forEach(m => {
+                    if (messageBelongsToRoom(m, targetRoomId, cleanMine, cleanPeer, false)) allMsgs.push(m);
+                });
             } catch (e) {}
         }
 
@@ -213,13 +210,55 @@ const PageChat = (() => {
     }
 
     function getStatusLabel(room) {
-        if (room.kind === 'ai') return 'Llama 3.3 (Assistente IA)';
+        if (room.kind === 'ai') return 'Assistente IA';
         const sim = room.similarity || 0;
         const viewed = NebulaStorage.hasViewedProfile(state, emailClean, room.peer);
         const parts = [];
         if (viewed) parts.push('Visualizado');
-        if (sim > 0) parts.push(`${sim}% afinidade`);
+        if (sim >= 15) parts.push(`${sim}% afinidade`);
+        else if (room.shared_topics?.length) parts.push(room.shared_topics[0]);
         return parts.length ? parts.join(' · ') : 'Pesquisador';
+    }
+
+    function renderResearcherSearchResults(query) {
+        const box = document.getElementById('chat-researcher-search-results');
+        if (!box) return;
+        const q = (query || '').trim();
+        if (!q) { box.innerHTML = ''; box.style.display = 'none'; return; }
+
+        const results = NebulaStorage.searchResearchers(state, q, emailClean, 8);
+        if (!results.length) {
+            box.innerHTML = `<div style="padding:0.6rem;font-size:0.8rem;color:var(--text-white-60);">Nenhum pesquisador encontrado.</div>`;
+            box.style.display = 'block';
+            return;
+        }
+
+        box.innerHTML = results.map(r => {
+            const initial = (r.name || '?').charAt(0).toUpperCase();
+            const photo = r.photo ? `<img src="${r.photo}" alt="" style="width:100%;height:100%;object-fit:cover;">` : initial;
+            const affLabel = r.similarity >= 15 ? `${r.similarity}% afinidade` : 'Sem afinidade calculada';
+            return `<button type="button" class="chat-search-result" onclick="PageChat.startChatWith('${r.email}')" style="display:flex;align-items:center;gap:0.5rem;width:100%;padding:0.55rem 0.7rem;border:none;background:transparent;cursor:pointer;text-align:left;border-bottom:1px solid rgba(0,0,0,0.05);">
+                <div style="width:28px;height:28px;border-radius:50%;background:var(--color-blue);overflow:hidden;display:flex;align-items:center;justify-content:center;color:#fff;font-size:0.75rem;font-weight:700;flex-shrink:0;">${photo}</div>
+                <div style="flex:1;min-width:0;">
+                    <div style="font-weight:600;font-size:0.82rem;color:var(--text-white);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.name}</div>
+                    <div style="font-size:0.72rem;color:var(--text-white-60);">${affLabel}</div>
+                </div>
+            </button>`;
+        }).join('');
+        box.style.display = 'block';
+    }
+
+    async function startChatWith(peerEmail) {
+        const clean = (peerEmail || '').toLowerCase().trim();
+        await NebulaStorage.ensureUserProfile(state, clean);
+        await openChatWithTarget(clean);
+        rooms = getAvailableRooms(state, email);
+        renderRoomsList();
+        selectRoom(activeRoomIdx);
+        const searchBox = document.getElementById('chat-researcher-search');
+        const resultsBox = document.getElementById('chat-researcher-search-results');
+        if (searchBox) searchBox.value = '';
+        if (resultsBox) { resultsBox.innerHTML = ''; resultsBox.style.display = 'none'; }
     }
 
     function renderRoomsList() {
@@ -405,20 +444,20 @@ const PageChat = (() => {
         if (!clean || clean === 'ai') return;
 
         await NebulaStorage.ensureUserProfile(state, clean);
+        const affinity = NetworkEngine.compareRepositories(state, emailClean, clean);
         rooms = getAvailableRooms(state, email);
 
         let idx = rooms.findIndex(r => (r.peer || '').toLowerCase().trim() === clean);
         if (idx <= 0) {
-            const userKey = NebulaStorage.findUserKey(state, clean);
-            const userObj = userKey ? state.users[userKey] : null;
-            const roomId = buildRoomId(emailClean, userKey || clean);
+            const userKey = NebulaStorage.findUserKey(state, clean) || clean;
+            const userObj = state.users[userKey] || {};
             rooms.push({
-                id: roomId,
-                label: userObj?.name || clean.split('@')[0],
-                peer: userKey || clean,
+                id: buildRoomId(emailClean, userKey),
+                label: userObj.name || clean.split('@')[0],
+                peer: userKey,
                 kind: 'direct',
-                shared_topics: ['Pesquisa Científica'],
-                similarity: 0
+                shared_topics: affinity.shared_topics || [],
+                similarity: affinity.similarity || 0
             });
             idx = rooms.length - 1;
         }
@@ -449,6 +488,8 @@ const PageChat = (() => {
             <div class="chat-layout-container">
                 <div class="chat-sidebar-panel glass">
                     <div class="section-title" style="margin-bottom:0.5rem;">Conversas</div>
+                    <input type="text" id="chat-researcher-search" class="input" placeholder="Buscar pesquisador por nome ou tema..." style="margin-bottom:0.5rem;font-size:0.85rem;padding:0.5rem 0.75rem;">
+                    <div id="chat-researcher-search-results" style="display:none;max-height:180px;overflow-y:auto;background:rgba(255,255,255,0.35);border-radius:10px;margin-bottom:0.5rem;"></div>
                     <div id="chat-rooms-list"></div>
                 </div>
                 <div class="chat-main-panel glass" style="border-radius:24px;padding:0;">
@@ -561,7 +602,11 @@ const PageChat = (() => {
         chatDraft.addEventListener('keydown', e => {
             if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); btn.click(); }
         });
+
+        document.getElementById('chat-researcher-search')?.addEventListener('input', e => {
+            renderResearcherSearchResults(e.target.value);
+        });
     }
 
-    return { render, selectRoom, selectPeer, buildRoomId, getStoredMessages, saveStoredMessages, openChatWithTarget };
+    return { render, selectRoom, selectPeer, buildRoomId, getStoredMessages, saveStoredMessages, openChatWithTarget, startChatWith };
 })();
