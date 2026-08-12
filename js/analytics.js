@@ -128,7 +128,7 @@ const NebulaAnalytics = (() => {
 
     async function fetchAllProfiles() {
         if (!window.NebulaSupabase) return [];
-        const { data } = await window.NebulaSupabase.from('profiles').select('email,name,research,tutorial_completed,photo');
+        const { data } = await window.NebulaSupabase.from('profiles').select('email,name,research,tutorial_completed,interest');
         return data || [];
     }
 

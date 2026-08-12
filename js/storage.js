@@ -139,7 +139,7 @@ const NebulaStorage = (() => {
                 }
 
                 const { data: allProfiles } = await window.NebulaSupabase
-                    .from('profiles').select('email, name, research, photo, interest, tutorial_completed, pass');
+                    .from('profiles').select('email, name, research, interest, tutorial_completed, pass');
                 if (allProfiles) {
                     allProfiles.forEach(p => {
                         const pKey = (p.email || '').toLowerCase().trim();
@@ -285,7 +285,6 @@ const NebulaStorage = (() => {
                     research: user.research,
                     pass: user.pass,
                     tutorial_completed: user.tutorial_completed || false,
-                    photo: user.photo || null,
                     interest: interestObj
                 };
                 await window.NebulaSupabase.from('profiles').upsert(profileObj);
@@ -329,7 +328,7 @@ const NebulaStorage = (() => {
             try {
                 const { data } = await window.NebulaSupabase
                     .from('profiles')
-                    .select('email, name, research, photo, interest, tutorial_completed, pass')
+                    .select('email, name, research, interest, tutorial_completed, pass')
                     .eq('email', clean)
                     .maybeSingle();
                 if (data) {
@@ -454,7 +453,7 @@ const NebulaStorage = (() => {
         const cfg = window.NebulaSupabaseConfig;
         if (!cfg) return [];
         try {
-            const url = `${cfg.url}/rest/v1/profiles?select=email,name,research,photo,interest,tutorial_completed,pass&order=name.asc`;
+            const url = `${cfg.url}/rest/v1/profiles?select=email,name,research,interest,tutorial_completed,pass&order=name.asc&limit=200`;
             const controller = new AbortController();
             const timeout = setTimeout(() => controller.abort(), 8000);
             const res = await fetch(url, {
@@ -485,7 +484,7 @@ const NebulaStorage = (() => {
             try {
                 const { data } = await window.NebulaSupabase
                     .from('profiles')
-                    .select('email, name, research, photo, interest, tutorial_completed, pass')
+                    .select('email, name, research, interest, tutorial_completed, pass')
                     .order('name', { ascending: true })
                     .limit(200);
                 if (data && data.length) return data;

@@ -352,6 +352,7 @@ const PageAuth = (() => {
                     state.admin_mode = false;
                     errorBox.innerHTML = `<div class="small-muted mt-1">Carregando acervo seguro...</div>`;
                     await NebulaStorage.syncWorkspaceStateAsync(state, matchedEmail);
+                    await NebulaStorage.refreshCommunityDirectory(state);
                     state.page = 'Tela Principal';
                     saveAccount(matchedEmail, userObj.name, pass);
                     NebulaAnalytics.startSession(matchedEmail);
@@ -644,7 +645,8 @@ const PageAuth = (() => {
             setTimeout(async () => {
                 try {
                     await NebulaStorage.syncWorkspaceStateAsync(stateObj, email);
-                    NebulaApp.renderApp(); // atualiza dados vindos do servidor
+                    await NebulaStorage.refreshCommunityDirectory(stateObj);
+                    NebulaApp.renderApp();
                 } catch(e) { console.warn('[Auth] Background sync failed:', e); }
             }, 200);
             return;

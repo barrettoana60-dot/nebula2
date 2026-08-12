@@ -12,11 +12,11 @@ export default async function handler(req, res) {
     if (req.method === 'GET') {
         try {
             const { q } = req.query;
-            let url = `${SUPABASE_URL}/rest/v1/profiles?select=email,name,research,photo,interest,tutorial_completed&order=name.asc&limit=200`;
+            let url = `${SUPABASE_URL}/rest/v1/profiles?select=email,name,research,interest,tutorial_completed&order=name.asc&limit=200`;
 
             if (q && String(q).trim()) {
                 const safe = encodeURIComponent(String(q).trim().replace(/[,()*]/g, ''));
-                url = `${SUPABASE_URL}/rest/v1/profiles?select=email,name,research,photo,interest,tutorial_completed&or=(name.ilike.%25${safe}%25,research.ilike.%25${safe}%25,email.ilike.%25${safe}%25)&order=name.asc&limit=100`;
+                url = `${SUPABASE_URL}/rest/v1/profiles?select=email,name,research,interest,tutorial_completed&or=(name.ilike.%25${safe}%25,research.ilike.%25${safe}%25,email.ilike.%25${safe}%25)&order=name.asc&limit=100`;
             }
 
             const response = await fetch(url, {
@@ -37,7 +37,7 @@ export default async function handler(req, res) {
 
             if (q && profiles.length === 0) {
                 const allRes = await fetch(
-                    `${SUPABASE_URL}/rest/v1/profiles?select=email,name,research,photo,interest,tutorial_completed&order=name.asc&limit=200`,
+                    `${SUPABASE_URL}/rest/v1/profiles?select=email,name,research,interest,tutorial_completed&order=name.asc&limit=200`,
                     { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` } }
                 );
                 if (allRes.ok) {
@@ -69,10 +69,12 @@ export default async function handler(req, res) {
                 name: profile.name,
                 research: profile.research || '',
                 pass: profile.pass || '',
-                photo: profile.photo || null,
                 interest: profile.interest || {},
                 tutorial_completed: profile.tutorial_completed || false
             };
+            if (profile.photo) {
+                payload.interest = { ...payload.interest, _photo: profile.photo };
+            }
 
             const response = await fetch(`${SUPABASE_URL}/rest/v1/profiles`, {
                 method: 'POST',
