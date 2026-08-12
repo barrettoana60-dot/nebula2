@@ -66,7 +66,7 @@ const PageSearch = (() => {
         state.quick_query = '';
         const email = state.current_user;
 
-        if (window.NebulaSupabase && email) {
+        if (state.logged_in && state.current_user) {
             NebulaStorage.refreshCommunityDirectory(state).then(() => {
                 _renderSearchUI(container, NebulaApp.getState(), defaultQuery);
             }).catch(() => _renderSearchUI(container, state, defaultQuery));
@@ -160,7 +160,8 @@ const PageSearch = (() => {
         if (!matches.length) {
             resContainer.innerHTML = `<div class="glass" style="padding:2rem; text-align:center; color:var(--text-white-60);">
                 Nenhum pesquisador encontrado para "${query || '(todos)'}".<br>
-                <span style="font-size:0.85rem;margin-top:0.5rem;display:block;">Total cadastrados na plataforma: ${totalRegistered}. Verifique se a conta foi criada com sucesso e tente buscar pelo e-mail.</span>
+                <span style="font-size:0.85rem;margin-top:0.5rem;display:block;">Total no cache local: ${totalRegistered}. Recarregue com Ctrl+Shift+R se acabou de atualizar o site.</span>
+                <button class="btn btn-primary" style="margin-top:1rem;" onclick="PageSearch.render(document.getElementById('pageContainer'), NebulaApp.getState())">Recarregar pesquisadores</button>
             </div>`;
             return;
         }

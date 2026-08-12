@@ -263,7 +263,7 @@ const NetworkEngine = (() => {
     }
 
     function getAffinityConnections(state, email, limit = 50) {
-        return getConnectedUsers(state, email, limit, 15);
+        return getConnectedUsers(state, email, limit, 5);
     }
 
     function buildConnectionChainNetwork(state, email, limitUsers, minSimilarity = 15) {

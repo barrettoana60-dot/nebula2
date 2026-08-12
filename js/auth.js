@@ -421,16 +421,21 @@ const PageAuth = (() => {
 
             try {
                 await NebulaStorage.saveStateAsync(state);
-                if (window.NebulaSupabase) {
-                    await window.NebulaSupabase.from('workspaces').upsert({
-                        email: email,
-                        repository: [],
-                        search_history: [],
-                        inbox: []
-                    });
-                    const count = await NebulaStorage.refreshCommunityDirectory(state);
-                    console.log('[Auth] Perfil registrado. Pesquisadores na plataforma:', count);
-                }
+                await fetch('/api/profiles', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        profile: {
+                            email,
+                            name,
+                            research,
+                            pass,
+                            interest: state.user_interest[email] || {}
+                        }
+                    })
+                });
+                const count = await NebulaStorage.refreshCommunityDirectory(state);
+                console.log('[Auth] Perfil registrado. Pesquisadores na plataforma:', count);
             } catch(e) {
                 console.warn('[Auth] Async cloud save failed on register:', e);
             }

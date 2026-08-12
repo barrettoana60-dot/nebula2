@@ -477,26 +477,40 @@ const NebulaStorage = (() => {
         }
     }
 
-    async function refreshCommunityDirectory(state) {
-        if (!state) return 0;
-        let profiles = [];
+    async function fetchAllCommunityProfiles() {
+        let profiles = await fetchCommunityProfilesDirect();
+        if (profiles.length) return profiles;
 
         if (window.NebulaSupabase) {
             try {
-                const { data, error } = await window.NebulaSupabase
+                const { data } = await window.NebulaSupabase
                     .from('profiles')
                     .select('email, name, research, photo, interest, tutorial_completed, pass')
-                    .order('name', { ascending: true });
-                if (!error && data) profiles = data;
+                    .order('name', { ascending: true })
+                    .limit(200);
+                if (data && data.length) return data;
             } catch (e) {
-                console.warn('[Storage] Supabase client profile fetch failed:', e);
+                console.warn('[Storage] Supabase client profiles fetch failed:', e);
             }
         }
 
-        if (!profiles.length) {
-            profiles = await fetchCommunityProfilesDirect();
-        }
+        profiles = await fetchProfilesFromAPI('');
+        return profiles || [];
+    }
 
+    async function searchCloudProfiles(query) {
+        const q = (query || '').trim();
+        const all = await fetchAllCommunityProfiles();
+        if (!q) return all;
+
+        const ql = q.toLowerCase();
+        return all.filter(p => {
+            const hay = `${p.name || ''} ${p.research || ''} ${p.email || ''}`.toLowerCase();
+            return hay.includes(ql);
+        });
+    }
+
+    function mergeProfilesIntoState(state, profiles) {
         if (!state.users) state.users = {};
         if (!state.user_interest) state.user_interest = {};
         if (!state.workspaces) state.workspaces = {};
@@ -525,47 +539,64 @@ const NebulaStorage = (() => {
             try { rebuildInterests(state, uKey); } catch (e) {}
         });
         saveState(state);
+    }
+
+    async function fetchProfilesFromAPI(query) {
+        try {
+            const url = query
+                ? `/api/profiles?q=${encodeURIComponent(query)}`
+                : '/api/profiles';
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 10000);
+            const res = await fetch(url, { signal: controller.signal });
+            clearTimeout(timeout);
+            if (!res.ok) {
+                console.warn('[Storage] fetchProfilesFromAPI HTTP', res.status);
+                return [];
+            }
+            const data = await res.json();
+            return data.profiles || [];
+        } catch (e) {
+            console.warn('[Storage] fetchProfilesFromAPI failed:', e);
+            return [];
+        }
+    }
+
+    async function saveProfileViaAPI(profile) {
+        try {
+            const res = await fetch('/api/profiles', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ profile })
+            });
+            return res.ok;
+        } catch (e) {
+            return false;
+        }
+    }
+
+    async function refreshCommunityDirectory(state) {
+        if (!state) return 0;
+
+        const profiles = await fetchAllCommunityProfiles();
+        mergeProfilesIntoState(state, profiles);
+        console.log('[Nebula] Diretório carregado:', profiles.length, 'pesquisadores');
         return profiles.length;
     }
 
-    async function searchResearchersDirect(query) {
-        const q = (query || '').trim().replace(/[,()*]/g, '');
-        const cfg = window.NebulaSupabaseConfig;
-        if (!cfg || !q) return [];
-        try {
-            const safe = encodeURIComponent(q);
-            const url = `${cfg.url}/rest/v1/profiles?select=email,name,research,photo,interest,tutorial_completed,pass&or=(name.ilike.*${safe}*,research.ilike.*${safe}*,email.ilike.*${safe}*)&order=name.asc&limit=50`;
-            const controller = new AbortController();
-            const timeout = setTimeout(() => controller.abort(), 8000);
-            const res = await fetch(url, {
-                headers: {
-                    'apikey': cfg.key,
-                    'Authorization': `Bearer ${cfg.key}`,
-                    'Content-Type': 'application/json'
-                },
-                signal: controller.signal
-            });
-            clearTimeout(timeout);
-            if (!res.ok) {
-                const all = await fetchCommunityProfilesDirect();
-                const ql = q.toLowerCase();
-                return all.filter(p =>
-                    (p.name || '').toLowerCase().includes(ql) ||
-                    (p.research || '').toLowerCase().includes(ql) ||
-                    (p.email || '').toLowerCase().includes(ql)
-                );
-            }
-            return await res.json();
-        } catch (e) {
-            console.warn('[Storage] searchResearchersDirect failed:', e);
-            const all = await fetchCommunityProfilesDirect();
-            const ql = q.toLowerCase();
-            return all.filter(p =>
-                (p.name || '').toLowerCase().includes(ql) ||
-                (p.research || '').toLowerCase().includes(ql) ||
-                (p.email || '').toLowerCase().includes(ql)
-            );
+    async function searchResearchersAsync(state, query, currentEmail, limit = 30) {
+        const q = (query || '').trim();
+        const myEmail = (currentEmail || '').toLowerCase().trim();
+
+        let cloudProfiles = await searchCloudProfiles(q);
+
+        if (!cloudProfiles.length) {
+            await refreshCommunityDirectory(state);
+            return searchResearchersLocal(state, q, myEmail, limit);
         }
+
+        mergeProfilesIntoState(state, cloudProfiles);
+        return searchResearchersLocal(state, q, myEmail, limit);
     }
 
     function searchResearchersLocal(state, query, currentEmail, limit = 30) {
@@ -602,60 +633,6 @@ const NebulaStorage = (() => {
                 });
             }
         });
-
-        return results.sort((a, b) => {
-            if (a.is_self && !b.is_self) return -1;
-            if (!a.is_self && b.is_self) return 1;
-            return b.similarity - a.similarity;
-        }).slice(0, limit);
-    }
-
-    async function searchResearchersAsync(state, query, currentEmail, limit = 30) {
-        await refreshCommunityDirectory(state);
-
-        let results = searchResearchersLocal(state, query, currentEmail, limit);
-
-        const q = (query || '').trim();
-        if (q && results.length < 3) {
-            const cloudHits = await searchResearchersDirect(q);
-            cloudHits.forEach(p => {
-                const pKey = (p.email || '').toLowerCase().trim();
-                if (!pKey) return;
-                if (!state.users[pKey]) {
-                    state.users[pKey] = {
-                        name: p.name,
-                        research: p.research || '',
-                        pass: p.pass || '',
-                        photo: p.interest?._photo || p.photo || null
-                    };
-                }
-                if (!results.some(r => r.email === pKey)) {
-                    let affinity = { similarity: 0, shared_topics: [], connection_points: [], is_strong: false, is_medium: false };
-                    const myEmail = (currentEmail || '').toLowerCase().trim();
-                    if (myEmail && pKey !== myEmail) {
-                        try { affinity = NetworkEngine.compareRepositories(state, myEmail, pKey); } catch (e) {}
-                    }
-                    results.push({
-                        email: pKey,
-                        name: p.name || pKey,
-                        research: p.research || '',
-                        photo: p.interest?._photo || p.photo || null,
-                        similarity: affinity.similarity,
-                        shared_topics: affinity.shared_topics,
-                        connection_points: affinity.connection_points,
-                        is_strong: affinity.is_strong,
-                        is_medium: affinity.is_medium,
-                        topic: affinity.shared_topics?.[0] || 'Pesquisa Geral',
-                        is_self: pKey === myEmail
-                    });
-                }
-            });
-            saveState(state);
-        }
-
-        if (!q) {
-            results = searchResearchersLocal(state, '', currentEmail, limit);
-        }
 
         return results.sort((a, b) => {
             if (a.is_self && !b.is_self) return -1;
@@ -771,5 +748,7 @@ const NebulaStorage = (() => {
         searchResearchersAsync,
         searchResearchersLocal,
         fetchCommunityProfilesDirect,
+        fetchProfilesFromAPI,
+        saveProfileViaAPI,
     };
 })();
