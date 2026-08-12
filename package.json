@@ -1,0 +1,11 @@
+{
+  "name": "nebula-research",
+  "version": "3.0.0",
+  "description": "Nebula Research — Pesquisa acadêmica multimodal com análise inteligente",
+  "private": true,
+  "scripts": {
+    "build": "echo 'No build step required'",
+    "dev": "npx -y serve@latest . -l 3000 --cors",
+    "start": "npx -y serve@latest . -l 3000 --cors"
+  }
+}

@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="description" content="Nebula Research — Pesquisa acadêmica multimodal com análise inteligente, visual escuro animado e repositórios privados">
+    <title>Nebula Research</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='40' fill='none' stroke='%23e0e0e0' stroke-width='8' /><circle cx='50' cy='50' r='15' fill='%23e0e0e0' /></svg>">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/nebula.css?v=87">
+    <link rel="stylesheet" href="css/mobile.css?v=87">
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="js/cookies.js?v=73"></script>
+</head>
+<body>
+    <div id="app" class="app-root">
+        <!-- Floating orbs -->
+        <div class="orb orb-a"></div>
+        <div class="orb orb-b"></div>
+        <div class="orb orb-c"></div>
+
+        <!-- Navbar (hidden when not logged in) -->
+        <nav id="navbar" class="nav-shell" style="display:none">
+            <div class="nav-brand">Nebula Research</div>
+            <div class="nav-center-wrap" style="display:flex; align-items:center; gap:1.5rem; flex: 1; justify-content: center;">
+                <div class="nav-links" id="navLinks"></div>
+                <div class="nav-search-wrap" id="navSearchWrap">
+                    <input type="text" id="nav-search-input" placeholder="Pesquisar no Nebula..." />
+                    <span class="nav-search-icon">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+                    </span>
+                </div>
+            </div>
+            <div class="nav-right desktop-nav-right" style="display:flex; align-items:center; gap: 1rem;">
+                <div id="navBellWrapper" class="desktop-bell-wrap" style="position:relative;">
+                    <button onclick="NebulaApp.toggleBellDropdown()" style="background:transparent;border:none;cursor:pointer;position:relative;padding:4px 6px;" title="Notificações">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--text-white-80)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+                            <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+                        </svg>
+                        <span id="navUnreadBadge" style="display:none; position:absolute; top:0px; right:0px; background:#f05011; color:white; font-size:0.65rem; padding: 1px 4px; border-radius:50%; font-weight:bold; min-width:16px; text-align:center;">0</span>
+                    </button>
+                </div>
+                <div id="navUserWrapper" style="position:relative;">
+                    <button type="button" class="nav-user-chip" id="navUserChip" onclick="NebulaApp.navigate('Perfil')" title="Perfil"></button>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Dropdowns globais (desktop + mobile) -->
+        <div id="bellDropdown" style="display:none; opacity:0; transform:translateY(-8px); transition:all 0.18s ease; position:fixed; width:320px; background:rgba(218,200,179,0.92); backdrop-filter:blur(25px); -webkit-backdrop-filter:blur(25px); border:1px solid rgba(0,0,0,0.08); border-radius:14px; box-shadow:0 10px 30px rgba(0,0,0,0.06); z-index:10003; overflow:hidden;"></div>
+        <div id="accountDropdown" style="display:none; opacity:0; transform:translateY(-8px); transition:all 0.18s ease; position:fixed; width:280px; background:rgba(218,200,179,0.92); backdrop-filter:blur(25px); -webkit-backdrop-filter:blur(25px); border:1px solid rgba(0,0,0,0.08); border-radius:14px; box-shadow:0 10px 30px rgba(0,0,0,0.06); z-index:10003; overflow:hidden;"></div>
+
+        <!-- Mobile header (<=768px) -->
+        <header id="mobileHeader" class="mobile-header" style="display:none">
+            <div class="mobile-header-title" id="mobileHeaderTitle">Nebula</div>
+            <div class="mobile-header-actions">
+                <button type="button" class="mobile-hdr-btn" onclick="NebulaApp.toggleMobileMoreSheet()" title="Mais opções">
+                    <svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.5" fill="currentColor" stroke="none"/></svg>
+                </button>
+                <div id="mobileBellWrapper" style="position:relative;">
+                    <button type="button" class="mobile-hdr-btn" onclick="NebulaApp.toggleBellDropdown()" title="Notificações">
+                        <svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                        <span id="mobileUnreadBadge" style="display:none;position:absolute;top:2px;right:2px;background:#f05011;color:#fff;font-size:0.6rem;padding:1px 4px;border-radius:50%;font-weight:700;min-width:14px;text-align:center;">0</span>
+                    </button>
+                </div>
+                <button type="button" class="mobile-hdr-avatar" id="mobileHdrAvatar" onclick="NebulaApp.navigate('Perfil')" title="Perfil">?</button>
+            </div>
+        </header>
+
+        <!-- Page Container -->
+        <main id="pageContainer" class="page-container"></main>
+
+        <!-- Mobile bottom navigation (visible only on small screens when logged in) -->
+        <nav id="mobileBottomNav" class="mobile-bottom-nav" aria-label="Navegação principal" style="display:none"></nav>
+
+        <!-- Mobile overflow menu -->
+        <div id="mobileMoreSheet" class="mobile-more-sheet" aria-hidden="true">
+            <div class="mobile-more-backdrop" onclick="NebulaApp.closeMobileMoreSheet()"></div>
+            <div class="mobile-more-panel">
+                <div class="mobile-more-handle"></div>
+                <div class="mobile-more-title">Mais opções</div>
+                <button type="button" class="mobile-more-item" onclick="NebulaApp.navigate('Análise'); NebulaApp.closeMobileMoreSheet();">
+                    <span class="mobile-more-icon">⬡</span> Análise e mapa mental
+                </button>
+                <button type="button" class="mobile-more-item" onclick="NebulaApp.navigate('Conexões'); NebulaApp.closeMobileMoreSheet();">
+                    <span class="mobile-more-icon">◈</span> Conexões
+                </button>
+                <button type="button" class="mobile-more-item" onclick="NebulaApp.navigate('Comunidade'); NebulaApp.closeMobileMoreSheet();">
+                    <span class="mobile-more-icon">◎</span> Mensagens
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts (v86 cache bust) -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/supabase-client.js?v=87"></script>
+    <script src="js/storage.js?v=87"></script>
+    <script src="js/text-engine.js?v=87"></script>
+    <script src="js/ai-engine.js?v=87"></script>
+    <script src="js/document-engine.js?v=87"></script>
+    <script src="js/search-engine.js?v=87"></script>
+    <script src="js/network-engine.js?v=87"></script>
+    <script src="js/analytics.js?v=87"></script>
+    <script src="js/pages/backroom.js?v=87"></script>
+    <script src="js/pages/dashboard.js?v=87"></script>
+    <script src="js/pages/search.js?v=87"></script>
+    <script src="js/pages/repository.js?v=87"></script>
+    <script src="js/pages/analysis.js?v=87"></script>
+    <script src="js/pages/editor.js?v=87"></script>
+    <script src="js/pages/connections.js?v=87"></script>
+    <script src="js/pages/chat.js?v=87"></script>
+    <script src="js/pages/profile.js?v=87"></script>
+    <script src="js/auth.js?v=87"></script>
+    <script src="js/tutorial.js?v=87"></script>
+    <script src="js/app.js?v=87"></script>
+</body>
+</html>
