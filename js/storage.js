@@ -131,10 +131,6 @@ const NebulaStorage = (() => {
                         repository: myWs.repository || [],
                         search_history: myWs.search_history || []
                     };
-                    if (myWs.inbox && Array.isArray(myWs.inbox)) {
-                        const existingLocal = state.community_messages || [];
-                        state.community_messages = mergeMessagesUnique(existingLocal, myWs.inbox);
-                    }
                 }
 
                 const { data: allProfiles } = await window.NebulaSupabase
@@ -295,13 +291,11 @@ const NebulaStorage = (() => {
                 await window.NebulaSupabase.from('profiles').upsert(profileObj);
 
                 const ws = state.workspaces[email] || blankWorkspace();
-                const existingInbox = (state.community_messages || []).slice(-300);
 
                 await window.NebulaSupabase.from('workspaces').upsert({
                     email: email,
                     repository: ws.repository || [],
-                    search_history: ws.search_history || [],
-                    inbox: existingInbox
+                    search_history: ws.search_history || []
                 });
             } catch (err) {
                 console.error("[Supabase] Sync failed:", err);
@@ -372,34 +366,84 @@ const NebulaStorage = (() => {
         return key;
     }
 
+    function messageTimestamp(m) {
+        if (!m) return 0;
+        if (m.timestamp) return m.timestamp;
+        if (m.created_at) return new Date(m.created_at).getTime();
+        return 0;
+    }
+
+    function messagesAreDuplicate(a, b) {
+        if (!a || !b || !a.text || !b.text) return false;
+        if (a.id && b.id && a.id === b.id) return true;
+
+        const sa = (a.sender_email || '').toLowerCase().trim();
+        const sb = (b.sender_email || '').toLowerCase().trim();
+        if (sa !== sb) return false;
+
+        const ta = (a.text || '').trim();
+        const tb = (b.text || '').trim();
+        if (ta !== tb) return false;
+
+        const ra = (a.room_id || '').trim();
+        const rb = (b.room_id || '').trim();
+        if (ra && rb && ra !== rb) return false;
+
+        const tsa = messageTimestamp(a);
+        const tsb = messageTimestamp(b);
+        return Math.abs(tsa - tsb) < 180000;
+    }
+
     function messageDedupeKey(m) {
         if (!m || !m.text) return '';
         const s = (m.sender_email || '').toLowerCase().trim();
-        const r = (m.recipient_email || '').toLowerCase().trim();
         const t = (m.text || '').trim();
-        const ts = m.timestamp || 0;
-        const bucket = Math.floor(ts / 15000);
         const room = (m.room_id || '').trim();
-        return `msg::${room}::${s}::${r}::${t}::${bucket}`;
+        const bucket = Math.floor(messageTimestamp(m) / 60000);
+        return `msg::${room}::${s}::${t}::${bucket}`;
+    }
+
+    function normalizeChatMessage(m, myEmail, peerEmail) {
+        if (!m || !m.text) return null;
+        const sender = (m.sender_email || '').toLowerCase().trim();
+        const mine = (myEmail || '').toLowerCase().trim();
+        const peer = (peerEmail || '').toLowerCase().trim();
+        let recipient = (m.recipient_email || '').toLowerCase().trim();
+        if (!recipient && sender && mine && peer && sender !== 'ai@nebula' && sender !== 'ai') {
+            recipient = sender === mine ? peer : mine;
+        }
+        return {
+            ...m,
+            sender_email: sender,
+            recipient_email: recipient,
+            timestamp: messageTimestamp(m) || Date.now(),
+            room_id: m.room_id || ''
+        };
     }
 
     function mergeMessagesUnique(existing, incoming) {
-        const map = new Map();
-        [...(existing || []), ...(incoming || [])].forEach(m => {
-            if (!m || !m.text) return;
-            const key = messageDedupeKey(m);
-            const prev = map.get(key);
-            if (!prev || (m.id && !prev.id) || (m.delivered && !prev.delivered)) {
-                map.set(key, { ...prev, ...m });
+        const out = [...(existing || [])];
+        (incoming || []).forEach(m => {
+            if (!m?.text) return;
+            const idx = out.findIndex(o => messagesAreDuplicate(o, m));
+            if (idx >= 0) {
+                out[idx] = {
+                    ...out[idx],
+                    ...m,
+                    id: out[idx].id || m.id,
+                    delivered: out[idx].delivered || m.delivered,
+                    read_by: out[idx].read_by || m.read_by
+                };
+            } else {
+                out.push(m);
             }
         });
-        return Array.from(map.values());
+        return out;
     }
 
     async function saveMessageToSupabase(msg) {
         if (!window.NebulaSupabase || !msg || !msg.text) return false;
         const sender = (msg.sender_email || '').toLowerCase().trim();
-        const recipient = (msg.recipient_email || '').toLowerCase().trim();
         try {
             const { data: existing } = await window.NebulaSupabase
                 .from('community_messages')
@@ -423,27 +467,6 @@ const NebulaStorage = (() => {
                 text: msg.text,
                 timestamp: msg.timestamp || Date.now()
             });
-
-            const msgWithMeta = { ...msg, sender_email: sender, recipient_email: recipient };
-
-            for (const userEmail of [sender, recipient]) {
-                if (!userEmail || userEmail === 'ai') continue;
-                const { data: ws } = await window.NebulaSupabase
-                    .from('workspaces')
-                    .select('repository, search_history, inbox')
-                    .eq('email', userEmail)
-                    .maybeSingle();
-
-                const inbox = [...(ws?.inbox || []), msgWithMeta];
-                const deduped = mergeMessagesUnique([], inbox).slice(-300);
-
-                await window.NebulaSupabase.from('workspaces').upsert({
-                    email: userEmail,
-                    repository: ws?.repository || [],
-                    search_history: ws?.search_history || [],
-                    inbox: deduped
-                });
-            }
             return true;
         } catch (e) {
             console.warn('[Storage] saveMessageToSupabase failed:', e);
@@ -460,7 +483,9 @@ const NebulaStorage = (() => {
                 .eq('room_id', roomId)
                 .order('timestamp', { ascending: true })
                 .limit(200);
-            return data || [];
+            return (data || [])
+                .map(row => normalizeChatMessage(row, email, peerEmail))
+                .filter(Boolean);
         } catch (e) {
             console.warn('[Storage] fetchMessagesFromSupabase failed:', e);
             return [];
@@ -854,6 +879,8 @@ const NebulaStorage = (() => {
         setTypingIndicator,
         getTypingPeers,
         messageDedupeKey,
+        messagesAreDuplicate,
+        normalizeChatMessage,
         mergeMessagesUnique,
         fetchOnlinePresence,
         pulsePresence,

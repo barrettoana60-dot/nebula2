@@ -1,6 +1,7 @@
 /* PAGE: CHAT — Cloud & Local Persistent Messaging with Supabase sync */
 const PageChat = (() => {
     let _pollTimer = null;
+    let _sendLock = false;
     let _typingTimer = null;
     let _presenceTimer = null;
     let _presenceList = [];
@@ -54,7 +55,6 @@ const PageChat = (() => {
     function collectPeersFromMessages(stateObj, myEmailClean) {
         const peers = new Map();
         const sources = [
-            ...(stateObj.community_messages || []),
             ...getStoredMessages()
         ];
         sources.forEach(m => {
@@ -139,17 +139,16 @@ const PageChat = (() => {
         const mergedLocal = NebulaStorage.mergeMessagesUnique(localStore, [msgObj]);
         saveStoredMessages(mergedLocal);
 
-        if (!state.community_messages) state.community_messages = [];
-        state.community_messages = NebulaStorage.mergeMessagesUnique(state.community_messages, [msgObj]);
-        NebulaStorage.saveState(state);
-
         if (!isAi) {
             NebulaStorage.saveMessageToSupabase(msgObj).then(ok => {
                 if (ok) {
                     msgObj.delivered = true;
-                    const idx = (state.community_messages || []).findIndex(m => m.id === msgObj.id);
-                    if (idx >= 0) state.community_messages[idx].delivered = true;
-                    NebulaStorage.saveState(state);
+                    const store = getStoredMessages();
+                    const idx = store.findIndex(m => m.id === msgObj.id || NebulaStorage.messagesAreDuplicate(m, msgObj));
+                    if (idx >= 0) {
+                        store[idx].delivered = true;
+                        saveStoredMessages(store);
+                    }
                 }
             }).catch(e => console.warn('[Chat] Supabase save error:', e));
         }
@@ -417,6 +416,8 @@ const PageChat = (() => {
         const msgContainer = document.getElementById('chat-messages-container');
         if (!msgContainer) return;
 
+        msgs = NebulaStorage.mergeMessagesUnique([], msgs);
+
         if (!msgs.length) {
             msgContainer.innerHTML = `<div style="padding:2rem; text-align:center; color:var(--text-white-60); font-size:0.9rem;">
                 ${room.kind === 'ai' ? 'Olá! Sou o Llama 3.3. Como posso ajudar na sua pesquisa hoje?' : 'Nenhuma mensagem ainda. Digite sua mensagem abaixo!'}
@@ -498,6 +499,8 @@ const PageChat = (() => {
         email = state.current_user;
         emailClean = (email || '').toLowerCase().trim();
 
+        saveStoredMessages(NebulaStorage.mergeMessagesUnique([], getStoredMessages()));
+
         await NebulaStorage.refreshCommunityDirectory(state);
         await NebulaStorage.syncWorkspaceStateAsync(state, email);
 
@@ -555,14 +558,17 @@ const PageChat = (() => {
         });
 
         btn.addEventListener('click', async () => {
+            if (_sendLock) return;
             const text = chatDraft.value.trim();
             if (!text) return;
             const room = rooms[activeRoomIdx];
             const sender = state.users[email] || state.users[emailClean] || {};
 
+            _sendLock = true;
             btn.disabled = true;
             btn.textContent = 'Enviando...';
 
+            try {
             const msgObj = {
                 id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
                 room_id: room.id,
@@ -577,8 +583,6 @@ const PageChat = (() => {
 
             await sendMessage(msgObj);
             chatDraft.value = '';
-            btn.disabled = false;
-            btn.textContent = 'Enviar mensagem';
             lastRenderedHash = '';
             await loadMessages();
 
@@ -620,10 +624,18 @@ const PageChat = (() => {
                 }
                 const aiStatusEl = document.getElementById('chat-status');
                 if (aiStatusEl) aiStatusEl.textContent = '';
+                _sendLock = false;
                 btn.disabled = false;
                 btn.textContent = 'Enviar mensagem';
                 lastRenderedHash = '';
                 await loadMessages();
+            }
+            } finally {
+                if (room.kind !== 'ai') {
+                    _sendLock = false;
+                    btn.disabled = false;
+                    btn.textContent = 'Enviar mensagem';
+                }
             }
         });
 
