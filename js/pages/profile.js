@@ -3,15 +3,19 @@ const PageProfile = (() => {
     function render(container, state, targetEmail) {
         const currentUser = state.current_user;
         const viewingSelf = !targetEmail || targetEmail === currentUser;
-        const profileEmail = viewingSelf ? currentUser : targetEmail;
+        const profileEmail = viewingSelf
+            ? (NebulaStorage.findUserKey(state, currentUser) || (currentUser || '').toLowerCase().trim())
+            : (NebulaStorage.findUserKey(state, targetEmail) || (targetEmail || '').toLowerCase().trim());
         const user = state.users[profileEmail] || { email: profileEmail };
+        user.photo = user.photo || NebulaStorage.getUserPhoto(state, profileEmail);
+        user.cover = user.cover || NebulaStorage.getUserCover(state, profileEmail);
 
         if (!viewingSelf) {
             renderPublicProfile(container, state, user, profileEmail);
             return;
         }
 
-        renderSelfProfile(container, state, user);
+        renderSelfProfile(container, state, user, profileEmail);
     }
 
     function renderPublicProfile(container, state, user, targetEmail) {
@@ -73,7 +77,8 @@ const PageProfile = (() => {
         });
     }
 
-    function renderSelfProfile(container, state, user) {
+    function renderSelfProfile(container, state, user, profileEmail) {
+        const emailKey = profileEmail || (NebulaStorage.findUserKey(state, state.current_user) || (state.current_user || '').toLowerCase().trim());
         const profileTerms = NebulaApp.recommendTerms(state.current_user, 25);
         const history = state.search_history || [];
 
@@ -192,10 +197,11 @@ const PageProfile = (() => {
             btn.disabled = true;
             btn.textContent = 'Salvando e sincronizando...';
             
-            state.users[state.current_user].name = newName;
-            state.users[state.current_user].research = newResearch;
+            state.users[emailKey].name = newName;
+            state.users[emailKey].research = newResearch;
+            if (state.current_user) state.current_user = emailKey;
 
-            NebulaStorage.rebuildInterests(state, state.current_user);
+            NebulaStorage.rebuildInterests(state, emailKey);
 
             for (const key of Object.keys(state)) {
                 if (key.startsWith('dashboard_articles_') || key.startsWith('conn_articles_')) delete state[key];
@@ -214,7 +220,7 @@ const PageProfile = (() => {
         });
 
         document.getElementById('prof-clear-interests')?.addEventListener('click', () => {
-            state.user_interest[state.current_user] = {};
+            state.user_interest[emailKey] = {};
             NebulaStorage.saveState(state);
             showToast('Preferências limpas', 'Seu perfil de recomendações foi reiniciado.');
             NebulaApp.navigate('Perfil');
@@ -232,8 +238,7 @@ const PageProfile = (() => {
             if (!file) return;
             try {
                 const dataUrl = await compressImage(file, 300, 0.65);
-                const email = state.current_user;
-                state.users[email].photo = dataUrl;
+                NebulaStorage.applyUserMedia(state, emailKey, { photo: dataUrl });
                 await NebulaStorage.saveStateAsync(state);
                 NebulaStorage.saveState(state);
 
@@ -246,8 +251,8 @@ const PageProfile = (() => {
         });
 
         document.getElementById('prof-avatar-display')?.addEventListener('click', () => {
-            const photo = state.users[state.current_user]?.photo;
-            if (photo && window.PageChat) PageChat.openPhotoViewer(photo, state.users[state.current_user]?.name || 'Perfil');
+            const photo = NebulaStorage.getUserPhoto(state, emailKey);
+            if (photo && window.PageChat) PageChat.openPhotoViewer(photo, state.users[emailKey]?.name || 'Perfil');
         });
 
         document.getElementById('prof-cover-input')?.addEventListener('change', async (e) => {
@@ -258,10 +263,9 @@ const PageProfile = (() => {
                 return;
             }
             try {
-                const dataUrl = await compressImage(file, 900, 0.7);
-                const emailKey = (state.current_user || '').toLowerCase().trim();
-                if (!state.users[emailKey]) state.users[emailKey] = { ...user };
-                state.users[emailKey].cover = dataUrl;
+                const dataUrl = await compressImage(file, 640, 0.55);
+                NebulaStorage.applyUserMedia(state, emailKey, { cover: dataUrl });
+                if (state.current_user) state.current_user = emailKey;
                 await NebulaStorage.saveStateAsync(state);
                 NebulaStorage.saveState(state);
 

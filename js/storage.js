@@ -43,7 +43,20 @@ const NebulaStorage = (() => {
         }
 
         cleanDemoResearchers(parsed);
+        hydrateUserMediaFromLocal(parsed);
         return parsed;
+    }
+
+    function hydrateUserMediaFromLocal(state) {
+        if (!state?.users) return;
+        Object.keys(state.users).forEach(email => {
+            const key = (email || '').toLowerCase().trim();
+            if (!key) return;
+            const cover = getUserCoverLocal(key);
+            const photo = getUserPhotoLocal(key);
+            if (cover) state.users[key].cover = state.users[key].cover || cover;
+            if (photo) state.users[key].photo = state.users[key].photo || photo;
+        });
     }
 
     function cleanDemoResearchers(state) {
@@ -104,8 +117,8 @@ const NebulaStorage = (() => {
                 const { data: myProfile } = await window.NebulaSupabase
                     .from('profiles').select('*').eq('email', emailKey).maybeSingle();
                 if (myProfile) {
-                    const localPhoto = (state.users[emailKey] || {}).photo || null;
-                    const localCover = (state.users[emailKey] || {}).cover || null;
+                    const localPhoto = (state.users[emailKey] || {}).photo || getUserPhotoLocal(emailKey);
+                    const localCover = (state.users[emailKey] || {}).cover || getUserCoverLocal(emailKey);
                     const dbPhoto = myProfile.interest?._photo || myProfile.photo || null;
                     const dbCover = myProfile.interest?._cover || null;
                     state.users[emailKey] = {
@@ -116,9 +129,12 @@ const NebulaStorage = (() => {
                         photo: dbPhoto || localPhoto,
                         cover: dbCover || localCover
                     };
+                    if (state.users[emailKey].cover) saveUserCoverLocal(emailKey, state.users[emailKey].cover);
+                    if (state.users[emailKey].photo) saveUserPhotoLocal(emailKey, state.users[emailKey].photo);
                     if (!state.user_interest) state.user_interest = {};
                     const cleanInterest = { ...(myProfile.interest || {}) };
                     delete cleanInterest._photo;
+                    delete cleanInterest._cover;
                     state.user_interest[emailKey] = cleanInterest;
                 }
 
@@ -139,8 +155,8 @@ const NebulaStorage = (() => {
                     allProfiles.forEach(p => {
                         const pKey = (p.email || '').toLowerCase().trim();
                         if (!pKey || pKey.startsWith('demo_')) return;
-                        const localPhoto = (state.users[pKey] || {}).photo || null;
-                        const localCover = (state.users[pKey] || {}).cover || null;
+                        const localPhoto = (state.users[pKey] || {}).photo || getUserPhotoLocal(pKey);
+                        const localCover = (state.users[pKey] || {}).cover || getUserCoverLocal(pKey);
                         const dbPhoto = p.interest?._photo || p.photo || null;
                         const dbCover = p.interest?._cover || null;
                         state.users[pKey] = {
@@ -151,10 +167,13 @@ const NebulaStorage = (() => {
                             photo: dbPhoto || localPhoto,
                             cover: dbCover || localCover
                         };
+                        if (state.users[pKey].cover) saveUserCoverLocal(pKey, state.users[pKey].cover);
+                        if (state.users[pKey].photo) saveUserPhotoLocal(pKey, state.users[pKey].photo);
                         if (p.interest) {
                             if (!state.user_interest) state.user_interest = {};
                             const cleanInterest = { ...p.interest };
                             delete cleanInterest._photo;
+                            delete cleanInterest._cover;
                             state.user_interest[pKey] = cleanInterest;
                         }
                     });
@@ -276,9 +295,11 @@ const NebulaStorage = (() => {
                 const interestObj = { ...(state.user_interest[email] || {}) };
                 if (user.photo) {
                     interestObj._photo = user.photo;
+                    saveUserPhotoLocal(email, user.photo);
                 }
                 if (user.cover) {
                     interestObj._cover = user.cover;
+                    saveUserCoverLocal(email, user.cover);
                 }
                 const profileObj = {
                     email: email,
@@ -288,7 +309,7 @@ const NebulaStorage = (() => {
                     tutorial_completed: user.tutorial_completed || false,
                     interest: interestObj
                 };
-                await window.NebulaSupabase.from('profiles').upsert(profileObj);
+                await upsertProfileToSupabase(profileObj);
 
                 const ws = state.workspaces[email] || blankWorkspace();
 
@@ -310,10 +331,100 @@ const NebulaStorage = (() => {
         return Object.keys(state.users || {}).find(e => e.toLowerCase().trim() === clean) || null;
     }
 
+    function coverStoreKey(email) {
+        return 'nebula_cover_' + (email || '').toLowerCase().trim();
+    }
+
+    function photoStoreKey(email) {
+        return 'nebula_photo_' + (email || '').toLowerCase().trim();
+    }
+
+    function saveUserCoverLocal(email, dataUrl) {
+        const key = coverStoreKey(email);
+        try {
+            if (dataUrl) localStorage.setItem(key, dataUrl);
+            else localStorage.removeItem(key);
+        } catch (e) {
+            console.warn('[Storage] Falha ao salvar capa local:', e);
+        }
+    }
+
+    function getUserCoverLocal(email) {
+        try {
+            return localStorage.getItem(coverStoreKey(email)) || null;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function saveUserPhotoLocal(email, dataUrl) {
+        const key = photoStoreKey(email);
+        try {
+            if (dataUrl) localStorage.setItem(key, dataUrl);
+            else localStorage.removeItem(key);
+        } catch (e) {
+            console.warn('[Storage] Falha ao salvar foto local:', e);
+        }
+    }
+
+    function getUserPhotoLocal(email) {
+        try {
+            return localStorage.getItem(photoStoreKey(email)) || null;
+        } catch (e) {
+            return null;
+        }
+    }
+
     function getUserPhoto(state, email) {
         const key = findUserKey(state, email);
+        return (key && state.users[key]?.photo) || getUserPhotoLocal(email) || null;
+    }
+
+    function getUserCover(state, email) {
+        const key = findUserKey(state, email);
+        const fromState = key ? state.users[key]?.cover : null;
+        const fromInterest = key ? state.user_interest?.[key]?._cover : null;
+        return fromState || fromInterest || getUserCoverLocal(email) || null;
+    }
+
+    function applyUserMedia(state, email, patch) {
+        const key = findUserKey(state, email) || (email || '').toLowerCase().trim();
         if (!key) return null;
-        return state.users[key]?.photo || null;
+        if (!state.users[key]) state.users[key] = {};
+        if (patch.photo !== undefined) {
+            state.users[key].photo = patch.photo;
+            saveUserPhotoLocal(key, patch.photo);
+        }
+        if (patch.cover !== undefined) {
+            state.users[key].cover = patch.cover;
+            saveUserCoverLocal(key, patch.cover);
+        }
+        return key;
+    }
+
+    async function upsertProfileToSupabase(profileObj) {
+        const cfg = window.NebulaSupabaseConfig;
+        if (!cfg?.url || !cfg?.key || !profileObj?.email) return false;
+        try {
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 25000);
+            const res = await fetch(`${cfg.url}/rest/v1/profiles`, {
+                method: 'POST',
+                headers: {
+                    'apikey': cfg.key,
+                    'Authorization': `Bearer ${cfg.key}`,
+                    'Content-Type': 'application/json',
+                    'Prefer': 'resolution=merge-duplicates,return=minimal'
+                },
+                body: JSON.stringify(profileObj),
+                signal: controller.signal
+            });
+            clearTimeout(timeout);
+            return res.ok;
+        } catch (e) {
+            console.warn('[Storage] upsertProfileToSupabase failed:', e);
+            return false;
+        }
     }
 
     async function ensureUserProfile(state, email) {
@@ -331,22 +442,30 @@ const NebulaStorage = (() => {
                     .eq('email', clean)
                     .maybeSingle();
                 if (data) {
+                    const pKey = (data.email || clean).toLowerCase().trim();
                     const dbPhoto = data.interest?._photo || data.photo || null;
-                    state.users[data.email] = {
+                    const dbCover = data.interest?._cover || null;
+                    const localPhoto = state.users[pKey]?.photo || getUserPhotoLocal(pKey);
+                    const localCover = state.users[pKey]?.cover || getUserCoverLocal(pKey);
+                    state.users[pKey] = {
                         name: data.name,
                         research: data.research || '',
-                        pass: data.pass || state.users[data.email]?.pass || '',
+                        pass: data.pass || state.users[pKey]?.pass || '',
                         tutorial_completed: data.tutorial_completed,
-                        photo: dbPhoto
+                        photo: dbPhoto || localPhoto,
+                        cover: dbCover || localCover
                     };
+                    if (state.users[pKey].cover) saveUserCoverLocal(pKey, state.users[pKey].cover);
+                    if (state.users[pKey].photo) saveUserPhotoLocal(pKey, state.users[pKey].photo);
                     if (data.interest) {
                         if (!state.user_interest) state.user_interest = {};
                         const cleanInterest = { ...data.interest };
                         delete cleanInterest._photo;
-                        state.user_interest[data.email] = cleanInterest;
+                        delete cleanInterest._cover;
+                        state.user_interest[pKey] = cleanInterest;
                     }
                     saveState(state);
-                    return data.email;
+                    return pKey;
                 }
             } catch (e) {
                 console.warn('[Storage] ensureUserProfile failed:', e);
@@ -619,14 +738,18 @@ const NebulaStorage = (() => {
             if (!pKey || pKey.startsWith('demo_')) return;
             const dbPhoto = p.interest?._photo || p.photo || null;
             const dbCover = p.interest?._cover || p.cover || null;
+            const localPhoto = state.users[pKey]?.photo || getUserPhotoLocal(pKey);
+            const localCover = state.users[pKey]?.cover || getUserCoverLocal(pKey);
             state.users[pKey] = {
                 name: p.name || pKey,
                 research: p.research || '',
                 pass: state.users[pKey]?.pass || p.pass || '',
                 tutorial_completed: p.tutorial_completed,
-                photo: dbPhoto || state.users[pKey]?.photo || null,
-                cover: dbCover || state.users[pKey]?.cover || null
+                photo: dbPhoto || localPhoto || null,
+                cover: dbCover || localCover || null
             };
+            if (state.users[pKey].cover) saveUserCoverLocal(pKey, state.users[pKey].cover);
+            if (state.users[pKey].photo) saveUserPhotoLocal(pKey, state.users[pKey].photo);
             if (p.interest) {
                 const cleanInterest = { ...p.interest };
                 delete cleanInterest._photo;
@@ -927,6 +1050,10 @@ const NebulaStorage = (() => {
         rebuildInterests,
         findUserKey,
         getUserPhoto,
+        getUserCover,
+        applyUserMedia,
+        saveUserCoverLocal,
+        saveUserPhotoLocal,
         ensureUserProfile,
         saveMessageToSupabase,
         fetchMessagesFromSupabase,
