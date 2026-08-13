@@ -2,6 +2,8 @@
 const PageChat = (() => {
     let _pollTimer = null;
     let _typingTimer = null;
+    let _presenceTimer = null;
+    let _presenceList = [];
     let activeRoomIdx = 0;
     let lastRenderedHash = '';
     let rooms = [];
@@ -146,14 +148,14 @@ const PageChat = (() => {
         NebulaStorage.saveState(state);
 
         if (!isAi) {
-            fetch('/api/messages', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message: msgObj })
-            }).catch(e => console.warn('[Chat] API POST error:', e));
-
-            NebulaStorage.saveMessageToSupabase(msgObj).catch(e => console.warn('[Chat] Supabase save error:', e));
-            NebulaStorage.saveStateAsync(state).catch(e => console.warn('[Chat] State sync error:', e));
+            NebulaStorage.saveMessageToSupabase(msgObj).then(ok => {
+                if (ok) {
+                    msgObj.delivered = true;
+                    const idx = (state.community_messages || []).findIndex(m => m.id === msgObj.id);
+                    if (idx >= 0) state.community_messages[idx].delivered = true;
+                    NebulaStorage.saveState(state);
+                }
+            }).catch(e => console.warn('[Chat] Supabase save error:', e));
         }
     }
 
@@ -175,19 +177,6 @@ const PageChat = (() => {
 
         if (!isAi) {
             try {
-                const controller = new AbortController();
-                const timeout = setTimeout(() => controller.abort(), 2500);
-                const res = await fetch(`/api/messages?roomId=${encodeURIComponent(targetRoomId)}`, { signal: controller.signal });
-                clearTimeout(timeout);
-                if (res.ok) {
-                    const data = await res.json();
-                    (data?.messages || []).forEach(m => {
-                        if (messageBelongsToRoom(m, targetRoomId, cleanMine, cleanPeer, false)) allMsgs.push(m);
-                    });
-                }
-            } catch (e) {}
-
-            try {
                 const cloudMsgs = await NebulaStorage.fetchMessagesFromSupabase(targetRoomId, cleanMine, cleanPeer);
                 cloudMsgs.forEach(m => {
                     if (messageBelongsToRoom(m, targetRoomId, cleanMine, cleanPeer, false)) allMsgs.push(m);
@@ -198,15 +187,42 @@ const PageChat = (() => {
         const uniqueMap = new Map();
         allMsgs.forEach(m => {
             if (!m) return;
-            const key = m.id || `${m.timestamp}_${(m.sender_email || '').toLowerCase()}_${(m.text || '').slice(0, 20)}`;
-            uniqueMap.set(key, m);
+            const key = NebulaStorage.messageDedupeKey(m);
+            if (!uniqueMap.has(key)) uniqueMap.set(key, m);
         });
 
         return Array.from(uniqueMap.values()).sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
     }
 
+    function openPhotoViewer(url, title) {
+        if (!url) return;
+        const existing = document.getElementById('nebula-photo-lightbox');
+        if (existing) existing.remove();
+        const overlay = document.createElement('div');
+        overlay.id = 'nebula-photo-lightbox';
+        overlay.className = 'photo-lightbox';
+        overlay.innerHTML = `
+            <div class="photo-lightbox-backdrop" onclick="this.parentElement.remove()"></div>
+            <div class="photo-lightbox-content">
+                <button type="button" class="photo-lightbox-close" onclick="document.getElementById('nebula-photo-lightbox')?.remove()">✕</button>
+                ${title ? `<div class="photo-lightbox-title">${title}</div>` : ''}
+                <img src="${url}" alt="${title || 'Foto'}" class="photo-lightbox-img">
+            </div>`;
+        document.body.appendChild(overlay);
+    }
+
     function getPeerPhoto(peerEmail) {
         return NebulaStorage.getUserPhoto(state, peerEmail);
+    }
+
+    function renderStatusDots(status) {
+        if (status === 'read') {
+            return `<span class="msg-status msg-status-read" title="Visualizado"><span class="msg-dot on"></span><span class="msg-dot on"></span></span>`;
+        }
+        if (status === 'delivered') {
+            return `<span class="msg-status msg-status-delivered" title="Enviado"><span class="msg-dot"></span><span class="msg-dot"></span></span>`;
+        }
+        return `<span class="msg-status msg-status-sent" title="Enviando"><span class="msg-dot"></span></span>`;
     }
 
     function getStatusLabel(room) {
@@ -278,7 +294,8 @@ const PageChat = (() => {
             } else {
                 const photo = getPeerPhoto(r.peer);
                 const initial = (r.label || '?').trim().charAt(0).toUpperCase();
-                avatarHtml = `<div class="chat-list-item-avatar">${photo ? `<img src="${photo}" alt="">` : initial}</div>`;
+                const online = r.kind === 'direct' && NebulaStorage.isUserOnline(_presenceList, r.peer);
+                avatarHtml = `<div class="chat-list-item-avatar" style="position:relative;">${photo ? `<img src="${photo}" alt="">` : initial}${online ? '<span class="online-dot"></span>' : ''}</div>`;
             }
 
             return `
@@ -305,11 +322,13 @@ const PageChat = (() => {
         } else {
             const photo = getPeerPhoto(room.peer);
             const initial = (room.label || '?').trim().charAt(0).toUpperCase();
-            avatarHtml = `<div class="chat-header-avatar user" style="cursor:pointer;" onclick="PageProfile.render(document.getElementById('pageContainer'), NebulaApp.getState(), '${room.peer}')">${photo ? `<img src="${photo}" alt="">` : initial}</div>`;
+            const online = NebulaStorage.isUserOnline(_presenceList, room.peer);
+            avatarHtml = `<div class="chat-header-avatar user" style="cursor:pointer;position:relative;" onclick="PageProfile.render(document.getElementById('pageContainer'), NebulaApp.getState(), '${room.peer}')">${photo ? `<img src="${photo}" alt="" onclick="event.stopPropagation();PageChat.openPhotoViewer('${photo.replace(/'/g, "\\'")}','${(room.label || '').replace(/'/g, "\\'")}')">` : initial}${online ? '<span class="online-dot"></span>' : ''}</div>`;
             const sim = room.similarity || 0;
             const viewed = NebulaStorage.hasViewedProfile(state, emailClean, room.peer);
             const topics = room.shared_topics?.length ? room.shared_topics.slice(0, 3).join(', ') : 'Pesquisa Científica';
             subtitleHtml =
+                (online ? `<span style="font-size:0.8rem;color:#10b981;font-weight:600;margin-right:8px;">● Online</span>` : `<span style="font-size:0.8rem;color:var(--text-white-40);margin-right:8px;">○ Offline</span>`) +
                 (viewed ? `<span style="font-size:0.8rem;color:#10b981;font-weight:600;margin-right:8px;">✓ Visualizado</span>` : '') +
                 (sim > 0 ? `<span style="font-size:0.8rem;color:var(--color-blue);font-weight:600;margin-right:8px;">${sim}% afinidade</span>` : '') +
                 `<span style="font-size:0.8rem;color:var(--text-white-60);">• ${topics}</span>` +
@@ -327,7 +346,9 @@ const PageChat = (() => {
     function renderTypingIndicator(room) {
         const statusEl = document.getElementById('chat-status');
         if (!statusEl || room.kind === 'ai') return;
-        const typingPeers = NebulaStorage.getTypingPeers(room.id, emailClean);
+        const remoteTyping = NebulaStorage.getRemoteTypingPeers(_presenceList, room.id, emailClean);
+        const localTyping = NebulaStorage.getTypingPeers(room.id, emailClean);
+        const typingPeers = remoteTyping.length ? remoteTyping : localTyping;
         if (typingPeers.length) {
             const peerEmail = typingPeers[0];
             const userKey = NebulaStorage.findUserKey(state, peerEmail);
@@ -375,6 +396,12 @@ const PageChat = (() => {
         const room = rooms[activeRoomIdx];
         if (!room) return;
 
+        _presenceList = await NebulaStorage.fetchOnlinePresence();
+        if (room.kind === 'direct') {
+            NebulaStorage.markRoomMessagesRead(state, emailClean, room.peer, room.id);
+            NebulaStorage.pulsePresence(emailClean, null);
+        }
+
         const msgs = await getRoomMessages(room.id, email, room.peer);
         const msgContainer = document.getElementById('chat-messages-container');
         if (!msgContainer) return;
@@ -418,22 +445,25 @@ const PageChat = (() => {
             const senderUser = userKey ? state.users[userKey] : {};
             const senderPhoto = senderUser.photo || null;
             const senderInitial = isAi ? 'IA' : (senderUser.name || msg.sender_name || 'U').trim().charAt(0).toUpperCase();
+            const statusHtml = isMe && !isAi ? renderStatusDots(NebulaStorage.getMessageStatus(msg, emailClean, room.peer, _presenceList, room.id)) : '';
+            const photoClick = senderPhoto ? `onclick="PageChat.openPhotoViewer('${senderPhoto.replace(/'/g, "\\'")}','${(senderUser.name || msg.sender_name || 'Usuário').replace(/'/g, "\\'")}')"` : '';
+            const photoStyle = senderPhoto ? 'cursor:pointer;' : '';
 
             html += `
                 <div style="display:flex; gap:0.6rem; align-items:flex-start; justify-content:${isMe ? 'flex-end' : 'flex-start'};">
                     ${!isMe ? `
-                    <div style="width:32px;height:32px;border-radius:50%;background:${isAi ? '#3b82f6' : 'var(--color-blue)'};display:flex;align-items:center;justify-content:center;font-size:0.8rem;font-weight:700;color:#fff;flex-shrink:0;overflow:hidden;">
+                    <div style="width:32px;height:32px;border-radius:50%;background:${isAi ? '#3b82f6' : 'var(--color-blue)'};display:flex;align-items:center;justify-content:center;font-size:0.8rem;font-weight:700;color:#fff;flex-shrink:0;overflow:hidden;${photoStyle}" ${photoClick}>
                         ${senderPhoto ? `<img src="${senderPhoto}" style="width:100%;height:100%;object-fit:cover;">` : senderInitial}
                     </div>` : ''}
                     <div class="chat-bubble ${isMe ? 'me' : ''}" style="margin:0;max-width:75%;">
-                        <div style="display:flex;justify-content:space-between;gap:1rem;font-size:0.75rem;color:var(--text-white-60);margin-bottom:0.25rem;">
+                        <div style="display:flex;justify-content:space-between;gap:1rem;font-size:0.75rem;color:var(--text-white-60);margin-bottom:0.25rem;align-items:center;">
                             <span><b>${isAi ? 'Llama 3.3 (IA)' : (msg.sender_name || senderUser.name || 'Usuário')}</b></span>
-                            <span>${time}</span>
+                            <span style="display:flex;align-items:center;gap:0.35rem;">${statusHtml}${time}</span>
                         </div>
                         <div style="word-break:break-word;font-size:0.92rem;color:var(--text-white-80);line-height:1.4;">${(msg.text || '').replace(/\n/g, '<br>')}</div>
                     </div>
                     ${isMe ? `
-                    <div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#f97316,#ea580c);display:flex;align-items:center;justify-content:center;font-size:0.8rem;font-weight:700;color:#fff;flex-shrink:0;overflow:hidden;">
+                    <div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#f97316,#ea580c);display:flex;align-items:center;justify-content:center;font-size:0.8rem;font-weight:700;color:#fff;flex-shrink:0;overflow:hidden;${photoStyle}" ${photoClick}>
                         ${senderPhoto ? `<img src="${senderPhoto}" style="width:100%;height:100%;object-fit:cover;">` : senderInitial}
                     </div>` : ''}
                 </div>`;
@@ -470,6 +500,7 @@ const PageChat = (() => {
     async function render(container, stateObj) {
         if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; }
         if (_typingTimer) { clearInterval(_typingTimer); _typingTimer = null; }
+        if (_presenceTimer) { clearInterval(_presenceTimer); _presenceTimer = null; }
 
         state = stateObj;
         email = state.current_user;
@@ -518,6 +549,8 @@ const PageChat = (() => {
 
         loadMessages();
         _pollTimer = setInterval(loadMessages, 2000);
+        NebulaStorage.pulsePresence(emailClean, null);
+        _presenceTimer = setInterval(() => NebulaStorage.pulsePresence(emailClean, null), 30000);
 
         const btn = document.getElementById('chat-send-btn');
         const chatDraft = document.getElementById('chat-draft');
@@ -611,5 +644,5 @@ const PageChat = (() => {
         });
     }
 
-    return { render, selectRoom, selectPeer, buildRoomId, getStoredMessages, saveStoredMessages, openChatWithTarget, startChatWith };
+    return { render, selectRoom, selectPeer, buildRoomId, getStoredMessages, saveStoredMessages, openChatWithTarget, startChatWith, openPhotoViewer };
 })();

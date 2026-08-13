@@ -48,6 +48,7 @@ const NebulaApp = (() => {
         // Quietly fetch latest data from Supabase in background
         if (state.logged_in && state.current_user && !state.admin_mode) {
             NebulaAnalytics.trackPage(state.current_user, state.page || 'Tela Principal');
+            NebulaStorage.pulsePresence(state.current_user, null);
             NebulaStorage.refreshCommunityDirectory(state).then(() => {
                 return NebulaStorage.syncWorkspaceStateAsync(state, state.current_user);
             }).then(() => {

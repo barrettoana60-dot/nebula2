@@ -1,16 +1,18 @@
+import { getGroqConfig, groqMissingResponse } from './_lib/groq.js';
+
 export default async function handler(req, res) {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-custom-key');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
     if (req.method === 'OPTIONS') return res.status(200).end();
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
+    const cfg = getGroqConfig();
+    if (!cfg) return groqMissingResponse(res);
+
     const { text, fileName, fileKind, userResearch, highlights } = req.body;
     if (!text || text.length < 30) return res.status(400).json({ error: 'Text too short' });
-
-    const customKey = req.headers['x-custom-key'];
-    const GROQ_KEY = customKey || process.env.LLAMA_API_KEY || process.env.GROQ_API_KEY || ('gsk_' + '7Fhh9oiC' + '2qaO2mUJ' + 'r00TWGdy' + 'b3FYUXCK' + 'mwYd4iFF' + '5vRLx3uF' + 'lECq');
 
     const systemPrompt = `Você é um Revisor Acadêmico Sênior especializado em análise bibliométrica e crítica epistemológica de documentos científicos. Sua tarefa é fazer um diagnóstico PROFUNDO e ESPECÍFICO de um documento acadêmico.
 Analise o texto e retorne APENAS um JSON válido com esta estrutura:
@@ -38,15 +40,8 @@ Retorne SOMENTE o JSON, sem texto adicional.`;
 
     userPrompt += `Texto do documento (trecho):\n---\n${text.slice(0, 12000)}\n---`;
 
-    let LLAMA_URL = 'https://api.groq.com/openai/v1/chat/completions';
-    let MODEL = 'llama-3.3-70b-versatile';
-    if (GROQ_KEY.startsWith('sk-or-')) {
-        LLAMA_URL = 'https://openrouter.ai/api/v1/chat/completions';
-        MODEL = 'meta-llama/llama-3.3-70b-instruct:free';
-    }
-
     const payload = {
-        model: MODEL,
+        model: cfg.model,
         messages: [
             { role: 'system', content: systemPrompt },
             { role: 'user', content: userPrompt }
@@ -58,11 +53,11 @@ Retorne SOMENTE o JSON, sem texto adicional.`;
 
     for (let attempt = 0; attempt < 2; attempt++) {
         try {
-            const response = await fetch(LLAMA_URL, {
+            const response = await fetch(cfg.url, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${GROQ_KEY}`
+                    'Authorization': `Bearer ${cfg.key}`
                 },
                 body: JSON.stringify(payload)
             });

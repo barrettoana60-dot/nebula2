@@ -21,6 +21,7 @@ const PageProfile = (() => {
         const userWs = state.workspaces[targetEmail] || {};
         const publicDocs = (userWs.repository || []).filter(d => d.visibility === 'public' || d.topic);
         const initial = (user.name || targetEmail).trim().charAt(0).toUpperCase();
+        const coverStyle = user.cover ? `background-image:url('${user.cover}');background-size:cover;background-position:center;` : '';
 
         container.innerHTML = `
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem;">
@@ -28,15 +29,18 @@ const PageProfile = (() => {
                 <button class="btn btn-primary" id="pub-msg-btn">Enviar Mensagem</button>
             </div>
 
-            <div class="glass-outer mb-1" style="padding:2rem;">
-                <div style="display:flex; align-items:center; gap:1.5rem; flex-wrap:wrap;">
-                    <div style="width:80px; height:80px; border-radius:50%; background:var(--color-blue); display:flex; align-items:center; justify-content:center; font-size:2.2rem; font-weight:800; color:#fff; overflow:hidden; flex-shrink:0;">
-                        ${user.photo ? `<img src="${user.photo}" alt="" style="width:100%;height:100%;object-fit:cover;">` : initial}
-                    </div>
-                    <div style="flex:1;">
-                        <h2 style="font-size:1.6rem; font-weight:700; margin-bottom:0.25rem; color:var(--text-white);">${user.name || 'Pesquisador'}</h2>
-                        <p style="color:var(--text-white-60); font-size:0.9rem;">@${targetEmail.split('@')[0]}</p>
-                        ${user.research ? `<div style="margin-top:0.75rem; font-size:0.95rem; color:var(--text-white-80); line-height:1.5;"><b>Linha de Pesquisa:</b> ${user.research}</div>` : ''}
+            <div class="glass-outer mb-1" style="padding:0; overflow:hidden; border-radius:20px;">
+                <div class="mobile-profile-cover" style="${coverStyle} min-height:140px;"></div>
+                <div style="padding:1.5rem 2rem 2rem; margin-top:-40px; position:relative; z-index:2;">
+                    <div style="display:flex; align-items:flex-end; gap:1.25rem; flex-wrap:wrap;">
+                        <div style="width:88px; height:88px; border-radius:22px; background:var(--color-blue); display:flex; align-items:center; justify-content:center; font-size:2rem; font-weight:800; color:#fff; overflow:hidden; flex-shrink:0; border:3px solid var(--bg-dark); box-shadow:0 8px 24px rgba(0,0,0,0.2); cursor:${user.photo ? 'pointer' : 'default'};" ${user.photo ? `onclick="PageChat.openPhotoViewer('${user.photo.replace(/'/g, "\\'")}','${(user.name || '').replace(/'/g, "\\'")}')"` : ''}>
+                            ${user.photo ? `<img src="${user.photo}" alt="" style="width:100%;height:100%;object-fit:cover;">` : initial}
+                        </div>
+                        <div style="flex:1; padding-bottom:0.25rem;">
+                            <h2 style="font-size:1.6rem; font-weight:700; margin-bottom:0.25rem; color:var(--text-white);">${user.name || 'Pesquisador'}</h2>
+                            <p style="color:var(--text-white-60); font-size:0.9rem;">@${targetEmail.split('@')[0]}</p>
+                            ${user.research ? `<div style="margin-top:0.75rem; font-size:0.95rem; color:var(--text-white-80); line-height:1.5;"><b>Linha de Pesquisa:</b> ${user.research}</div>` : ''}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -78,13 +82,21 @@ const PageProfile = (() => {
             histHtml += `</table>`;
         }
 
+        const coverStyle = user.cover ? `background-image:url('${user.cover}');background-size:cover;background-position:center;` : '';
+
         container.innerHTML = `
             <div class="mobile-profile-hero">
-                <div class="mobile-profile-cover"></div>
+                <div class="mobile-profile-cover" id="prof-cover-display" style="${coverStyle}">
+                    <button type="button" class="prof-cover-btn" onclick="document.getElementById('prof-cover-input').click()" title="Alterar capa">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                        Alterar capa
+                    </button>
+                    <input type="file" id="prof-cover-input" accept="image/*" style="display:none">
+                </div>
                 <div class="mobile-profile-identity">
                     <div class="mobile-profile-left">
                         <div class="mobile-profile-avatar-wrap">
-                            <div class="mobile-profile-avatar" id="prof-avatar-display">${user.photo ? `<img src="${user.photo}" alt="Foto" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;">` : (user.name || 'P').trim().charAt(0).toUpperCase()}</div>
+                            <div class="mobile-profile-avatar" id="prof-avatar-display" style="cursor:pointer;">${user.photo ? `<img src="${user.photo}" alt="Foto" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;">` : (user.name || 'P').trim().charAt(0).toUpperCase()}</div>
                             <button type="button" class="prof-photo-btn" onclick="document.getElementById('prof-photo-input').click()" title="Alterar foto">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
                             </button>
@@ -195,6 +207,33 @@ const PageProfile = (() => {
                 showToast('Foto atualizada!', 'Sua imagem de perfil foi salva.');
             } catch (err) {
                 showToast('Erro', 'Não foi possível salvar a foto.');
+            }
+        });
+
+        document.getElementById('prof-avatar-display')?.addEventListener('click', () => {
+            const photo = state.users[state.current_user]?.photo;
+            if (photo && window.PageChat) PageChat.openPhotoViewer(photo, state.users[state.current_user]?.name || 'Perfil');
+        });
+
+        document.getElementById('prof-cover-input')?.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            try {
+                const dataUrl = await compressImage(file, 1200, 0.72);
+                const email = state.current_user;
+                state.users[email].cover = dataUrl;
+                await NebulaStorage.saveStateAsync(state);
+                NebulaStorage.saveState(state);
+
+                const coverEl = document.getElementById('prof-cover-display');
+                if (coverEl) {
+                    coverEl.style.backgroundImage = `url('${dataUrl}')`;
+                    coverEl.style.backgroundSize = 'cover';
+                    coverEl.style.backgroundPosition = 'center';
+                }
+                showToast('Capa atualizada!', 'A capa do seu perfil foi salva.');
+            } catch (err) {
+                showToast('Erro', 'Não foi possível salvar a capa.');
             }
         });
     }

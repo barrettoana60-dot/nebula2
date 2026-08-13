@@ -1,3 +1,5 @@
+import { getGroqConfig, groqMissingResponse } from './_lib/groq.js';
+
 export default async function handler(req, res) {
     // CORS headers
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -18,11 +20,8 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'No documents provided' });
     }
 
-    const LLAMA_API_KEY = ('gsk_' + '7Fhh9oiC' + '2qaO2mUJ' + 'r00TWGdy' + 'b3FYUXCK' + 'mwYd4iFF' + '5vRLx3uF' + 'lECq');
-    if (!LLAMA_API_KEY) {
-        return res.status(500).json({ error: 'LLAMA_API_KEY is missing in Vercel' });
-    }
-    let LLAMA_URL = 'https://api.groq.com/openai/v1/chat/completions'; let MODEL = 'llama-3.3-70b-versatile'; if (typeof LLAMA_API_KEY !== 'undefined' && LLAMA_API_KEY.startsWith('sk-or-')) { LLAMA_URL = 'https://openrouter.ai/api/v1/chat/completions'; MODEL = 'meta-llama/llama-3.3-70b-instruct:free'; }
+    const cfg = getGroqConfig();
+    if (!cfg) return groqMissingResponse(res);
 
     const repoSummary = docs.map((d, i) => {
         let textSummary = `[Documento ${i+1}]\n  Título: ${d.name}\n  Autor(es): ${d.author || 'Desconhecido'}\n  Tema/Tópico: ${d.topic || 'Não classificado'}\n  Ano: ${d.year || 'Desconhecido'}\n  Idioma: ${d.language || 'Não informado'}\n  Palavras-chave: ${Array.isArray(d.keywords) ? d.keywords.join(', ') : 'Não informadas'}\n  Metodologia: ${d.methodology || 'Não identificada'}\n  Resumo: ${d.summary || 'Sem resumo'}\n  Principais Descobertas: ${d.key_findings || 'Não extraídas'}`;
@@ -60,14 +59,14 @@ TOTAL DE DOCUMENTOS NO ACERVO: ${docs.length}
 DETALHAMENTO COMPLETO DO ACERVO:\n\n${truncatedSummary}\n\nRealize o diagnóstico acadêmico profundo e retorne o JSON.`;
 
     try {
-        const response = await fetch(LLAMA_URL, {
+        const response = await fetch(cfg.url, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${LLAMA_API_KEY}`
+                'Authorization': `Bearer ${cfg.key}`
             },
             body: JSON.stringify({
-                model: MODEL,
+                model: cfg.model,
                 messages: [
                     { role: 'system', content: systemPrompt },
                     { role: 'user', content: userPrompt }

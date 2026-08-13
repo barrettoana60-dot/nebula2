@@ -1,3 +1,5 @@
+import { getGroqConfig, groqMissingResponse } from './_lib/groq.js';
+
 export default async function handler(req, res) {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -6,16 +8,13 @@ export default async function handler(req, res) {
     if (req.method === 'OPTIONS') return res.status(200).end();
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-    const { userProfile, communityProfiles } = req.body;
+    const cfg = getGroqConfig();
+    if (!cfg) return groqMissingResponse(res);
 
+    const { userProfile, communityProfiles } = req.body;
     if (!userProfile || !communityProfiles) {
         return res.status(400).json({ error: 'Missing profiles' });
     }
-
-    const LLAMA_API_KEY = process.env.LLAMA_API_KEY || '';
-    if (!LLAMA_API_KEY) return res.status(500).json({ error: 'LLAMA_API_KEY not configured' });
-    
-    let LLAMA_URL = 'https://api.groq.com/openai/v1/chat/completions'; let MODEL = 'llama-3.3-70b-versatile'; if (typeof LLAMA_API_KEY !== 'undefined' && LLAMA_API_KEY.startsWith('sk-or-')) { LLAMA_URL = 'https://openrouter.ai/api/v1/chat/completions'; MODEL = 'meta-llama/llama-3.3-70b-instruct:free'; }
 
     const systemPrompt = `Você é um Analista de Redes de Pesquisa Avançado.
 Sua tarefa é encontrar conexões NÃO-ÓBVIAS entre pesquisadores. 
@@ -45,14 +44,14 @@ ${communityProfiles.map(p => `- Nome: ${p.name || 'Desconhecido'} | Email: ${p.e
 Por favor, encontre as melhores conexões e retorne o JSON.`;
 
     try {
-        const response = await fetch(LLAMA_URL, {
+        const response = await fetch(cfg.url, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${LLAMA_API_KEY}`
+                'Authorization': `Bearer ${cfg.key}`
             },
             body: JSON.stringify({
-                model: MODEL,
+                model: cfg.model,
                 messages: [
                     { role: 'system', content: systemPrompt },
                     { role: 'user', content: userPrompt }

@@ -105,13 +105,16 @@ const NebulaStorage = (() => {
                     .from('profiles').select('*').eq('email', emailKey).maybeSingle();
                 if (myProfile) {
                     const localPhoto = (state.users[emailKey] || {}).photo || null;
+                    const localCover = (state.users[emailKey] || {}).cover || null;
                     const dbPhoto = myProfile.interest?._photo || myProfile.photo || null;
+                    const dbCover = myProfile.interest?._cover || null;
                     state.users[emailKey] = {
                         name: myProfile.name,
                         research: myProfile.research,
                         pass: myProfile.pass || state.users[emailKey]?.pass || '',
                         tutorial_completed: myProfile.tutorial_completed,
-                        photo: dbPhoto || localPhoto
+                        photo: dbPhoto || localPhoto,
+                        cover: dbCover || localCover
                     };
                     if (!state.user_interest) state.user_interest = {};
                     const cleanInterest = { ...(myProfile.interest || {}) };
@@ -145,13 +148,16 @@ const NebulaStorage = (() => {
                         const pKey = (p.email || '').toLowerCase().trim();
                         if (!pKey || pKey.startsWith('demo_')) return;
                         const localPhoto = (state.users[pKey] || {}).photo || null;
+                        const localCover = (state.users[pKey] || {}).cover || null;
                         const dbPhoto = p.interest?._photo || p.photo || null;
+                        const dbCover = p.interest?._cover || null;
                         state.users[pKey] = {
                             name: p.name,
                             research: p.research || '',
                             pass: state.users[pKey]?.pass || p.pass || '',
                             tutorial_completed: p.tutorial_completed,
-                            photo: dbPhoto || localPhoto
+                            photo: dbPhoto || localPhoto,
+                            cover: dbCover || localCover
                         };
                         if (p.interest) {
                             if (!state.user_interest) state.user_interest = {};
@@ -279,6 +285,9 @@ const NebulaStorage = (() => {
                 if (user.photo) {
                     interestObj._photo = user.photo;
                 }
+                if (user.cover) {
+                    interestObj._cover = user.cover;
+                }
                 const profileObj = {
                     email: email,
                     name: user.name,
@@ -367,11 +376,34 @@ const NebulaStorage = (() => {
         return key;
     }
 
+    function messageDedupeKey(m) {
+        if (!m) return '';
+        if (m.id) return `id::${m.id}`;
+        const s = (m.sender_email || '').toLowerCase().trim();
+        const t = (m.text || '').trim().slice(0, 120);
+        const ts = Math.floor((m.timestamp || 0) / 4000);
+        return `hash::${s}::${t}::${ts}`;
+    }
+
     async function saveMessageToSupabase(msg) {
         if (!window.NebulaSupabase || !msg || !msg.text) return false;
         const sender = (msg.sender_email || '').toLowerCase().trim();
         const recipient = (msg.recipient_email || '').toLowerCase().trim();
         try {
+            const { data: existing } = await window.NebulaSupabase
+                .from('community_messages')
+                .select('id,timestamp,sender_email,text')
+                .eq('room_id', msg.room_id)
+                .order('timestamp', { ascending: false })
+                .limit(30);
+
+            const dup = (existing || []).some(row =>
+                (row.sender_email || '').toLowerCase().trim() === sender &&
+                (row.text || '').trim() === (msg.text || '').trim() &&
+                Math.abs((row.timestamp || 0) - (msg.timestamp || 0)) < 8000
+            );
+            if (dup) return true;
+
             await window.NebulaSupabase.from('community_messages').insert({
                 room_id: msg.room_id,
                 room_label: msg.room_label || '',
@@ -414,39 +446,19 @@ const NebulaStorage = (() => {
     }
 
     async function fetchMessagesFromSupabase(roomId, email, peerEmail) {
-        if (!window.NebulaSupabase) return [];
-        const results = [];
-        const cleanMine = (email || '').toLowerCase().trim();
-        const cleanPeer = (peerEmail || '').toLowerCase().trim();
+        if (!window.NebulaSupabase || !roomId) return [];
         try {
-            if (roomId) {
-                const { data } = await window.NebulaSupabase
-                    .from('community_messages')
-                    .select('*')
-                    .eq('room_id', roomId)
-                    .order('timestamp', { ascending: true })
-                    .limit(200);
-                if (data) results.push(...data);
-            }
-            if (email && peerEmail) {
-                const { data: ws } = await window.NebulaSupabase
-                    .from('workspaces')
-                    .select('inbox')
-                    .eq('email', cleanMine)
-                    .maybeSingle();
-                if (ws?.inbox) {
-                    const filtered = ws.inbox.filter(m => {
-                        const s = (m.sender_email || '').toLowerCase().trim();
-                        const r = (m.recipient_email || '').toLowerCase().trim();
-                        return (s === cleanPeer && r === cleanMine) || (s === cleanMine && r === cleanPeer);
-                    });
-                    results.push(...filtered);
-                }
-            }
+            const { data } = await window.NebulaSupabase
+                .from('community_messages')
+                .select('*')
+                .eq('room_id', roomId)
+                .order('timestamp', { ascending: true })
+                .limit(200);
+            return data || [];
         } catch (e) {
             console.warn('[Storage] fetchMessagesFromSupabase failed:', e);
+            return [];
         }
-        return results;
     }
 
     async function fetchCommunityProfilesDirect() {
@@ -518,16 +530,19 @@ const NebulaStorage = (() => {
             const pKey = (p.email || '').toLowerCase().trim();
             if (!pKey || pKey.startsWith('demo_')) return;
             const dbPhoto = p.interest?._photo || p.photo || null;
+            const dbCover = p.interest?._cover || p.cover || null;
             state.users[pKey] = {
                 name: p.name || pKey,
                 research: p.research || '',
                 pass: state.users[pKey]?.pass || p.pass || '',
                 tutorial_completed: p.tutorial_completed,
-                photo: dbPhoto || state.users[pKey]?.photo || null
+                photo: dbPhoto || state.users[pKey]?.photo || null,
+                cover: dbCover || state.users[pKey]?.cover || null
             };
             if (p.interest) {
                 const cleanInterest = { ...p.interest };
                 delete cleanInterest._photo;
+                delete cleanInterest._cover;
                 state.user_interest[pKey] = { ...(state.user_interest[pKey] || {}), ...cleanInterest };
             }
             if (!state.workspaces[pKey]) state.workspaces[pKey] = blankWorkspace();
@@ -701,6 +716,104 @@ const NebulaStorage = (() => {
         try {
             localStorage.setItem(key, Date.now().toString());
         } catch (e) {}
+        pulsePresence(email, roomId).catch(() => {});
+    }
+
+    let _presenceCache = [];
+    let _presenceFetchedAt = 0;
+
+    async function fetchOnlinePresence(force) {
+        const now = Date.now();
+        if (!force && _presenceCache.length && now - _presenceFetchedAt < 8000) {
+            return _presenceCache;
+        }
+        try {
+            const res = await fetch('/api/presence');
+            if (res.ok) {
+                const data = await res.json();
+                _presenceCache = data.online || [];
+                _presenceFetchedAt = now;
+            }
+        } catch (e) {}
+        return _presenceCache;
+    }
+
+    async function pulsePresence(email, typingRoom, readRoom) {
+        if (!email) return;
+        try {
+            await fetch('/api/presence', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    email: (email || '').toLowerCase().trim(),
+                    typing_room: typingRoom || null,
+                    read_room: readRoom || null
+                })
+            });
+        } catch (e) {}
+    }
+
+    function isUserOnline(presenceList, email) {
+        const clean = (email || '').toLowerCase().trim();
+        return (presenceList || []).some(p => p.email === clean);
+    }
+
+    function getRemoteTypingPeers(presenceList, roomId, myEmail) {
+        const cleanMine = (myEmail || '').toLowerCase().trim();
+        const now = Date.now();
+        return (presenceList || []).filter(p =>
+            p.email !== cleanMine &&
+            p.typing_room === roomId &&
+            (p.typing_until || 0) > now
+        ).map(p => p.email);
+    }
+
+    function markRoomMessagesRead(state, readerEmail, peerEmail, roomId) {
+        if (!state || !readerEmail || !peerEmail || !roomId) return;
+        const reader = readerEmail.toLowerCase().trim();
+        const peer = peerEmail.toLowerCase().trim();
+        let changed = false;
+
+        const markList = (list) => {
+            if (!Array.isArray(list)) return;
+            list.forEach(m => {
+                const sender = (m.sender_email || '').toLowerCase().trim();
+                if (sender !== peer) return;
+                m.read_by = m.read_by || [];
+                if (!m.read_by.includes(reader)) {
+                    m.read_by.push(reader);
+                    m.read_at = Date.now();
+                    changed = true;
+                }
+            });
+        };
+
+        markList(state.community_messages);
+        try {
+            const storeKey = 'nebula_chat_store_v3_' + reader;
+            const local = JSON.parse(localStorage.getItem(storeKey) || '[]');
+            markList(local);
+            if (changed) localStorage.setItem(storeKey, JSON.stringify(local));
+        } catch (e) {}
+
+        if (changed) saveState(state);
+        pulsePresence(reader, null, roomId).catch(() => {});
+    }
+
+    function getMessageStatus(msg, myEmail, peerEmail, presenceList, roomId) {
+        const sender = (msg.sender_email || '').toLowerCase().trim();
+        const me = (myEmail || '').toLowerCase().trim();
+        const peer = (peerEmail || '').toLowerCase().trim();
+        if (sender !== me) return null;
+
+        const peerPresence = (presenceList || []).find(p => p.email === peer);
+        const readAt = peerPresence?.read_rooms?.[roomId] || 0;
+        if (readAt && readAt >= (msg.timestamp || 0)) return 'read';
+
+        const readBy = msg.read_by || [];
+        if (readBy.includes(peer)) return 'read';
+        if (msg.delivered) return 'delivered';
+        return 'sent';
     }
 
     function getTypingPeers(roomId, myEmail) {
@@ -741,6 +854,13 @@ const NebulaStorage = (() => {
         hasViewedProfile,
         setTypingIndicator,
         getTypingPeers,
+        messageDedupeKey,
+        fetchOnlinePresence,
+        pulsePresence,
+        isUserOnline,
+        getRemoteTypingPeers,
+        markRoomMessagesRead,
+        getMessageStatus,
         normalizeUserRegistry,
         searchResearchers,
         refreshCommunityDirectory,
