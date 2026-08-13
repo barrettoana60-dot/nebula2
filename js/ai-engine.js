@@ -13,6 +13,11 @@ const NebulaAI = (() => {
         if (_groqKeyLoaded) return _groqKeyCache;
         _groqKeyLoaded = true;
 
+        if (window.NebulaGroqConfig?.apiKey?.length > 10) {
+            _groqKeyCache = window.NebulaGroqConfig.apiKey;
+            return _groqKeyCache;
+        }
+
         try {
             const local = localStorage.getItem('nebula_groq_key');
             if (local && local.length > 10) {
