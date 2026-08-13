@@ -391,7 +391,41 @@ const NebulaStorage = (() => {
 
         const tsa = messageTimestamp(a);
         const tsb = messageTimestamp(b);
-        return Math.abs(tsa - tsb) < 180000;
+        return Math.abs(tsa - tsb) < 300000;
+    }
+
+    function buildDirectRoomId(a, b) {
+        const cleanA = (a || '').toLowerCase().trim();
+        const cleanB = (b || '').toLowerCase().trim();
+        const sorted = [cleanA, cleanB].sort().join('||');
+        let h = 0;
+        for (let i = 0; i < sorted.length; i++) { h = ((h << 5) - h + sorted.charCodeAt(i)) | 0; }
+        return `direct::${(h >>> 0).toString(16)}`;
+    }
+
+    async function fetchChatPeersFromSupabase(myEmail) {
+        const peers = new Map();
+        if (!window.NebulaSupabase || !myEmail) return peers;
+        const clean = myEmail.toLowerCase().trim();
+        try {
+            const { data } = await window.NebulaSupabase
+                .from('community_messages')
+                .select('sender_email, sender_name, room_id, timestamp')
+                .order('timestamp', { ascending: false })
+                .limit(150);
+
+            (data || []).forEach(m => {
+                const sender = (m.sender_email || '').toLowerCase().trim();
+                if (!sender || sender === 'ai@nebula' || sender === 'ai') return;
+                if (sender === clean) return;
+                if (m.room_id && buildDirectRoomId(clean, sender) === m.room_id) {
+                    peers.set(sender, m.sender_name || sender);
+                }
+            });
+        } catch (e) {
+            console.warn('[Storage] fetchChatPeersFromSupabase failed:', e);
+        }
+        return peers;
     }
 
     function messageDedupeKey(m) {
@@ -483,11 +517,34 @@ const NebulaStorage = (() => {
                 .eq('room_id', roomId)
                 .order('timestamp', { ascending: true })
                 .limit(200);
-            return (data || [])
+            return mergeMessagesUnique([], (data || [])
                 .map(row => normalizeChatMessage(row, email, peerEmail))
-                .filter(Boolean);
+                .filter(Boolean));
         } catch (e) {
             console.warn('[Storage] fetchMessagesFromSupabase failed:', e);
+            return [];
+        }
+    }
+
+    async function fetchUnreadMessagesFromSupabase(myEmail, sinceTs) {
+        if (!window.NebulaSupabase || !myEmail) return [];
+        const clean = myEmail.toLowerCase().trim();
+        const since = sinceTs || 0;
+        try {
+            const { data } = await window.NebulaSupabase
+                .from('community_messages')
+                .select('id, room_id, sender_email, sender_name, text, timestamp')
+                .neq('sender_email', clean)
+                .gt('timestamp', since)
+                .order('timestamp', { ascending: false })
+                .limit(50);
+
+            return (data || []).filter(m => {
+                const sender = (m.sender_email || '').toLowerCase().trim();
+                return sender && sender !== 'ai@nebula' && sender !== 'ai'
+                    && m.room_id && buildDirectRoomId(clean, sender) === m.room_id;
+            }).map(m => normalizeChatMessage(m, clean, m.sender_email));
+        } catch (e) {
             return [];
         }
     }
@@ -873,6 +930,8 @@ const NebulaStorage = (() => {
         ensureUserProfile,
         saveMessageToSupabase,
         fetchMessagesFromSupabase,
+        fetchChatPeersFromSupabase,
+        fetchUnreadMessagesFromSupabase,
         syncInboxFromSupabase,
         recordProfileView,
         hasViewedProfile,

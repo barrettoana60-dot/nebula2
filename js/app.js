@@ -241,9 +241,9 @@ const NebulaApp = (() => {
             const lastSeen = parseInt(localStorage.getItem('nebula_bell_seen_' + emailClean) || '0');
             let unread = [];
 
-            // 1. Lê do cache permanente local (0ms - zero lag)
+            // 1. Lê do cache local v3 (compatível com chat atual)
             try {
-                const localStore = JSON.parse(localStorage.getItem('nebula_chat_store_v2') || '[]');
+                const localStore = JSON.parse(localStorage.getItem('nebula_chat_store_v3_' + emailClean) || '[]');
                 const localUnread = localStore.filter(m =>
                     (m.recipient_email || '').toLowerCase().trim() === emailClean &&
                     (m.sender_email || '').toLowerCase().trim() !== emailClean &&
@@ -254,52 +254,14 @@ const NebulaApp = (() => {
                 unread.push(...localUnread);
             } catch (e) {}
 
-            // 2. Consulta a nuvem com timeout ultrarrápido de 1.5s (não trava a UI se a rede falhar)
+            // 2. Mensagens não lidas no Supabase (fonte única)
             try {
-                const controller = new AbortController();
-                const timeout = setTimeout(() => controller.abort(), 1500);
-                const res = await fetch(`/api/messages?email=${encodeURIComponent(emailClean)}&since=${lastSeen}`, { signal: controller.signal });
-                clearTimeout(timeout);
-
-                if (res.ok) {
-                    const data = await res.json();
-                    if (data && data.messages) {
-                        const recMsgs = data.messages.filter(m =>
-                            (m.sender_email || '').toLowerCase().trim() !== emailClean &&
-                            m.sender_email !== 'ai@nebula' &&
-                            m.sender_email !== 'ai'
-                        );
-                        unread.push(...recMsgs);
-                    }
-                }
+                const sbUnread = await NebulaStorage.fetchUnreadMessagesFromSupabase(emailClean, lastSeen);
+                unread.push(...sbUnread);
             } catch (e) {}
 
-            // 3. Sincroniza inbox do Supabase
-            try {
-                if (window.NebulaSupabase) {
-                    const { data: ws } = await window.NebulaSupabase
-                        .from('workspaces')
-                        .select('inbox')
-                        .eq('email', emailClean)
-                        .maybeSingle();
-                    if (ws?.inbox) {
-                        const sbUnread = ws.inbox.filter(m =>
-                            (m.recipient_email || '').toLowerCase().trim() === emailClean &&
-                            (m.sender_email || '').toLowerCase().trim() !== emailClean &&
-                            m.sender_email !== 'ai@nebula' &&
-                            (m.timestamp || 0) > lastSeen
-                        );
-                        unread.push(...sbUnread);
-                    }
-                }
-            } catch (e) {}
-
-            // Deduplica notificações por ID
-            const map = new Map();
-            unread.forEach(m => {
-                if (m && m.text) map.set(m.id || m.timestamp + '_' + m.sender_email, m);
-            });
-            const finalUnread = Array.from(map.values());
+            // Deduplica notificações
+            const finalUnread = NebulaStorage.mergeMessagesUnique([], unread);
             _cachedNotifications = finalUnread;
 
             const badge = document.getElementById('navUnreadBadge');

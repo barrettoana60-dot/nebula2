@@ -1,10 +1,115 @@
 /* ============================================================
    AI ENGINE — Groq API Integration (Llama 3.3 70B)
-   Chave fica apenas no servidor (GROQ_API_KEY no Vercel).
+   Tenta /api/* no Vercel; se falhar, usa Groq direto via chave
+   em Supabase (app_settings.groq_api_key) ou localStorage admin.
    ============================================================ */
 const NebulaAI = (() => {
     const API_BASE = '/api';
     const analysisCache = new Map();
+    let _groqKeyCache = null;
+    let _groqKeyLoaded = false;
+
+    async function getGroqKey() {
+        if (_groqKeyLoaded) return _groqKeyCache;
+        _groqKeyLoaded = true;
+
+        try {
+            const local = localStorage.getItem('nebula_groq_key');
+            if (local && local.length > 10) {
+                _groqKeyCache = local;
+                return local;
+            }
+        } catch (e) {}
+
+        if (window.NebulaSupabase) {
+            try {
+                const { data } = await window.NebulaSupabase
+                    .from('app_settings')
+                    .select('value')
+                    .eq('key', 'groq_api_key')
+                    .maybeSingle();
+                if (data?.value && data.value.length > 10) {
+                    _groqKeyCache = data.value;
+                    return data.value;
+                }
+            } catch (e) {
+                console.warn('[NebulaAI] app_settings não disponível:', e.message || e);
+            }
+        }
+        return null;
+    }
+
+    function getGroqEndpoint(key) {
+        if (key.startsWith('sk-or-')) {
+            return {
+                url: 'https://openrouter.ai/api/v1/chat/completions',
+                model: 'meta-llama/llama-3.3-70b-instruct:free'
+            };
+        }
+        return {
+            url: 'https://api.groq.com/openai/v1/chat/completions',
+            model: 'llama-3.3-70b-versatile'
+        };
+    }
+
+    async function groqRequest(messages, options = {}) {
+        const key = await getGroqKey();
+        if (!key) return null;
+
+        const cfg = getGroqEndpoint(key);
+        const payload = {
+            model: options.model || cfg.model,
+            messages,
+            temperature: options.temperature ?? 0.7,
+            max_tokens: options.max_tokens ?? 1500
+        };
+        if (options.response_format) payload.response_format = options.response_format;
+
+        for (let attempt = 0; attempt < 2; attempt++) {
+            try {
+                const response = await fetch(cfg.url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${key}`
+                    },
+                    body: JSON.stringify(payload)
+                });
+                if (!response.ok) {
+                    if (attempt === 0 && (response.status === 429 || response.status >= 500)) {
+                        await new Promise(r => setTimeout(r, 800));
+                        continue;
+                    }
+                    console.warn('[NebulaAI] Groq direct error:', response.status);
+                    return null;
+                }
+                const data = await response.json();
+                return data.choices?.[0]?.message?.content || null;
+            } catch (err) {
+                if (attempt === 0) {
+                    await new Promise(r => setTimeout(r, 600));
+                    continue;
+                }
+                console.error('[NebulaAI] Groq direct failed:', err);
+                return null;
+            }
+        }
+        return null;
+    }
+
+    async function apiPost(path, body) {
+        try {
+            const response = await fetch(`${API_BASE}${path}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            if (response.ok) return { ok: true, data: await response.json() };
+            return { ok: false, status: response.status };
+        } catch (e) {
+            return { ok: false, status: 0 };
+        }
+    }
 
     async function analyzeDocument(text, fileName, fileKind, userResearch, highlights) {
         if (!text || text.length < 30) return null;
@@ -14,25 +119,48 @@ const NebulaAI = (() => {
             return analysisCache.get(cacheKey);
         }
 
+        const apiResult = await apiPost('/analyze', { text, fileName, fileKind, userResearch, highlights });
+        if (apiResult.ok) {
+            if (!highlights) analysisCache.set(cacheKey, apiResult.data);
+            return apiResult.data;
+        }
+
+        const systemPrompt = `Você é um Revisor Acadêmico Sênior. Analise o documento e retorne APENAS JSON válido com: summary, author, year, language, topic, keywords (array), nationality, document_type, key_findings, methodology, deep_insight.`;
+
+        let userPrompt = `Arquivo: "${fileName}" (${fileKind})\nLinha de Pesquisa: ${userResearch || 'Geral'}\n\n`;
+        if (highlights && highlights.length > 0) {
+            const parsedHighlights = highlights.map(h => `[Trecho (Pág. ${h.page})]: "${h.text}"${h.comment ? ` (Nota: ${h.comment})` : ''}`).join('\n');
+            userPrompt += `Trechos destacados:\n${parsedHighlights}\n\n`;
+        }
+        userPrompt += `Texto:\n---\n${text.slice(0, 12000)}\n---`;
+
+        const content = await groqRequest(
+            [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPrompt }],
+            { temperature: 0.35, max_tokens: 2500, response_format: { type: 'json_object' } }
+        );
+        if (!content) return null;
+
         try {
-            const response = await fetch(`${API_BASE}/analyze`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ text, fileName, fileKind, userResearch, highlights })
-            });
-
-            if (!response.ok) {
-                console.warn('[NebulaAI] API error:', response.status);
-                return null;
-            }
-
-            const normalized = await response.json();
-            if (!highlights) {
-                analysisCache.set(cacheKey, normalized);
-            }
+            let cleaned = content.trim().replace(/^```(?:json)?\s*/, '').replace(/\s*```$/, '');
+            const result = JSON.parse(cleaned);
+            const normalized = {
+                summary: result.summary || null,
+                author: result.author || 'Desconhecido',
+                year: result.year > 1800 && result.year < 2100 ? result.year : null,
+                language: result.language || null,
+                topic: result.topic || null,
+                keywords: Array.isArray(result.keywords) ? result.keywords.slice(0, 20) : [],
+                nationality: result.nationality || 'Desconhecido',
+                document_type: result.document_type || null,
+                key_findings: result.key_findings || null,
+                methodology: result.methodology || null,
+                deep_insight: result.deep_insight || null,
+                ai_analyzed: true
+            };
+            if (!highlights) analysisCache.set(cacheKey, normalized);
             return normalized;
-        } catch (err) {
-            console.error('[NebulaAI] Analysis failed:', err);
+        } catch (e) {
+            console.error('[NebulaAI] Failed to parse analysis JSON:', e);
             return null;
         }
     }
@@ -48,44 +176,66 @@ const NebulaAI = (() => {
     }
 
     async function analyzeImage(base64Image, userResearch, query) {
+        const apiResult = await apiPost('/vision', { base64Image, userResearch, query });
+        if (apiResult.ok) return apiResult.data;
+
+        const systemPrompt = `Analise a imagem acadêmica e retorne JSON com: description, insight, keywords (array).`;
+        const userPrompt = `Pesquisa: ${userResearch || 'Geral'}\nBusca: ${query || 'Nenhuma'}`;
+
+        const content = await groqRequest(
+            [
+                { role: 'system', content: systemPrompt },
+                {
+                    role: 'user',
+                    content: [
+                        { type: 'text', text: userPrompt },
+                        { type: 'image_url', image_url: { url: base64Image } }
+                    ]
+                }
+            ],
+            { model: 'llama-3.2-11b-vision-preview', temperature: 0.2, max_tokens: 800, response_format: { type: 'json_object' } }
+        );
+        if (!content) return null;
         try {
-            const response = await fetch(`${API_BASE}/vision`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ base64Image, userResearch, query })
-            });
-            if (!response.ok) return null;
-            return await response.json();
-        } catch (err) {
-            console.error('[NebulaAI] Vision failed:', err);
+            let cleaned = content.trim().replace(/^```(?:json)?\s*/, '').replace(/\s*```$/, '');
+            return JSON.parse(cleaned);
+        } catch (e) {
             return null;
         }
     }
 
     async function isAvailable() {
-        return true;
+        const key = await getGroqKey();
+        if (key) return true;
+        try {
+            const res = await fetch(`${API_BASE}/health`);
+            return res.ok;
+        } catch (e) {
+            return false;
+        }
     }
 
     async function generateRepositoryReview(docs, userResearch) {
         if (!docs || docs.length === 0) return null;
 
-        try {
-            const response = await fetch(`${API_BASE}/review`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ docs, userResearch })
-            });
+        const apiResult = await apiPost('/review', { docs, userResearch });
+        if (apiResult.ok) return apiResult.data;
 
-            if (!response.ok) {
-                const errData = await response.json().catch(()=>({}));
-                throw new Error(errData.error || 'API error');
-            }
-
-            return await response.json();
-        } catch (err) {
-            console.warn('[NebulaAI] Repo Review failed via API, falling back to local heuristic:', err);
-            return generateLocalRepositoryReview(docs);
+        const content = await groqRequest(
+            [
+                { role: 'system', content: 'Analise o repositório acadêmico e retorne JSON com arrays: strengths, weaknesses, suggestions.' },
+                { role: 'user', content: `Pesquisa: ${userResearch || 'Geral'}\nDocumentos: ${JSON.stringify(docs.slice(0, 20).map(d => ({ name: d.name, topic: d.topic, year: d.year })))}` }
+            ],
+            { temperature: 0.4, max_tokens: 1200, response_format: { type: 'json_object' } }
+        );
+        if (content) {
+            try {
+                let cleaned = content.trim().replace(/^```(?:json)?\s*/, '').replace(/\s*```$/, '');
+                return JSON.parse(cleaned);
+            } catch (e) {}
         }
+
+        return generateLocalRepositoryReview(docs);
     }
 
     function generateLocalRepositoryReview(docs) {
@@ -124,49 +274,49 @@ const NebulaAI = (() => {
     }
 
     async function chatWithAI(messages) {
-        for (let attempt = 0; attempt < 2; attempt++) {
-            try {
-                const response = await fetch(`${API_BASE}/chat`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ messages })
-                });
-
-                if (!response.ok) {
-                    if (attempt === 0) {
-                        await new Promise(r => setTimeout(r, 600));
-                        continue;
-                    }
-                    return `Ocorreu um erro ao comunicar com a IA Llama. Tente novamente em alguns segundos.`;
-                }
-
-                const data = await response.json();
-                return data.reply || 'Sem resposta.';
-            } catch (e) {
-                if (attempt === 0) {
-                    await new Promise(r => setTimeout(r, 600));
-                    continue;
-                }
-                console.error('[NebulaAI] Chat failed:', e);
-                return 'Erro de conexão com o servidor de IA. Tente novamente em alguns segundos.';
-            }
+        const apiResult = await apiPost('/chat', { messages });
+        if (apiResult.ok && apiResult.data?.reply) {
+            return apiResult.data.reply;
         }
+
+        const content = await groqRequest(messages, { temperature: 0.7, max_tokens: 1500 });
+        if (content) return content;
+
+        const hasKey = await getGroqKey();
+        if (!hasKey) {
+            return 'IA Llama não configurada. Adicione a chave Groq em Supabase (tabela app_settings, chave groq_api_key) ou configure GROQ_API_KEY no Vercel.';
+        }
+        return 'Ocorreu um erro ao comunicar com a IA Llama. Tente novamente em alguns segundos.';
     }
 
     async function findConnections(userProfile, communityProfiles) {
+        const apiResult = await apiPost('/connections', { userProfile, communityProfiles });
+        if (apiResult.ok) return apiResult.data;
+
+        const content = await groqRequest(
+            [
+                { role: 'system', content: 'Retorne JSON com array "connections" de emails recomendados para networking acadêmico.' },
+                { role: 'user', content: JSON.stringify({ userProfile, communityProfiles: communityProfiles.slice(0, 30) }) }
+            ],
+            { temperature: 0.3, max_tokens: 800, response_format: { type: 'json_object' } }
+        );
+        if (!content) return null;
         try {
-            const response = await fetch(`${API_BASE}/connections`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userProfile, communityProfiles })
-            });
-            if (!response.ok) return null;
-            return await response.json();
-        } catch (err) {
-            console.error('[NebulaAI] Connections failed:', err);
+            let cleaned = content.trim().replace(/^```(?:json)?\s*/, '').replace(/\s*```$/, '');
+            return JSON.parse(cleaned);
+        } catch (e) {
             return null;
         }
     }
 
-    return { analyzeDocument, generateRepositoryReview, isAvailable, chatWithAI, analyzeImage, findConnections };
+    function setGroqKey(key) {
+        _groqKeyCache = key || null;
+        _groqKeyLoaded = true;
+        try {
+            if (key) localStorage.setItem('nebula_groq_key', key);
+            else localStorage.removeItem('nebula_groq_key');
+        } catch (e) {}
+    }
+
+    return { analyzeDocument, generateRepositoryReview, isAvailable, chatWithAI, analyzeImage, findConnections, setGroqKey, getGroqKey };
 })();

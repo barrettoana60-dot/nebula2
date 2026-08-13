@@ -2,6 +2,7 @@
 const PageChat = (() => {
     let _pollTimer = null;
     let _sendLock = false;
+    let _optimisticMsgs = [];
     let _typingTimer = null;
     let _presenceTimer = null;
     let _presenceList = [];
@@ -54,10 +55,7 @@ const PageChat = (() => {
 
     function collectPeersFromMessages(stateObj, myEmailClean) {
         const peers = new Map();
-        const sources = [
-            ...getStoredMessages()
-        ];
-        sources.forEach(m => {
+        getStoredMessages().forEach(m => {
             if (!m) return;
             const sender = (m.sender_email || '').toLowerCase().trim();
             const recipient = (m.recipient_email || '').toLowerCase().trim();
@@ -70,7 +68,16 @@ const PageChat = (() => {
         return peers;
     }
 
-    function getAvailableRooms(stateObj, userEmail) {
+    async function collectPeersAsync(stateObj, myEmailClean) {
+        const peers = collectPeersFromMessages(stateObj, myEmailClean);
+        try {
+            const remote = await NebulaStorage.fetchChatPeersFromSupabase(myEmailClean);
+            remote.forEach((name, email) => peers.set(email, name));
+        } catch (e) {}
+        return peers;
+    }
+
+    async function getAvailableRooms(stateObj, userEmail) {
         const list = [
             { id: 'ai::llama33', label: 'Llama 3.3 (Assistente IA)', peer: 'ai', kind: 'ai' }
         ];
@@ -78,7 +85,7 @@ const PageChat = (() => {
         const myEmailClean = (userEmail || '').toLowerCase().trim();
         const knownPeers = new Map();
 
-        collectPeersFromMessages(stateObj, myEmailClean).forEach((name, peerEmail) => {
+        (await collectPeersAsync(stateObj, myEmailClean)).forEach((name, peerEmail) => {
             const userKey = (NebulaStorage.findUserKey(stateObj, peerEmail) || peerEmail).toLowerCase().trim();
             const userObj = stateObj.users[userKey] || {};
             knownPeers.set(userKey, {
@@ -135,23 +142,18 @@ const PageChat = (() => {
         msgObj.sender_email = senderEmail;
         msgObj.recipient_email = recipientEmail;
 
-        const localStore = getStoredMessages();
-        const mergedLocal = NebulaStorage.mergeMessagesUnique(localStore, [msgObj]);
-        saveStoredMessages(mergedLocal);
-
-        if (!isAi) {
-            NebulaStorage.saveMessageToSupabase(msgObj).then(ok => {
-                if (ok) {
-                    msgObj.delivered = true;
-                    const store = getStoredMessages();
-                    const idx = store.findIndex(m => m.id === msgObj.id || NebulaStorage.messagesAreDuplicate(m, msgObj));
-                    if (idx >= 0) {
-                        store[idx].delivered = true;
-                        saveStoredMessages(store);
-                    }
-                }
-            }).catch(e => console.warn('[Chat] Supabase save error:', e));
+        if (isAi) {
+            const localStore = getStoredMessages();
+            saveStoredMessages(NebulaStorage.mergeMessagesUnique(localStore, [msgObj]));
+            return;
         }
+
+        msgObj._pending = true;
+        _optimisticMsgs = NebulaStorage.mergeMessagesUnique(_optimisticMsgs, [msgObj]);
+
+        const ok = await NebulaStorage.saveMessageToSupabase(msgObj);
+        _optimisticMsgs = _optimisticMsgs.filter(m => m.id !== msgObj.id);
+        if (ok) msgObj.delivered = true;
     }
 
     async function getRoomMessages(roomId, myEmail, peerEmail) {
@@ -160,29 +162,25 @@ const PageChat = (() => {
         const cleanPeer = (peerEmail || '').toLowerCase().trim();
         const targetRoomId = isAi ? roomId : buildRoomId(cleanMine, cleanPeer);
 
-        let allMsgs = [];
-
-        const localMsgs = getStoredMessages();
-        localMsgs.forEach(m => {
-            if (messageBelongsToRoom(m, targetRoomId, cleanMine, cleanPeer, isAi)) allMsgs.push(m);
-        });
-
-        if (!isAi) {
-            try {
-                const cloudMsgs = await NebulaStorage.fetchMessagesFromSupabase(targetRoomId, cleanMine, cleanPeer);
-                cloudMsgs.forEach(m => {
-                    if (messageBelongsToRoom(m, targetRoomId, cleanMine, cleanPeer, false)) allMsgs.push(m);
-                });
-            } catch (e) {}
+        if (isAi) {
+            const aiMsgs = getStoredMessages().filter(m =>
+                messageBelongsToRoom(m, targetRoomId, cleanMine, cleanPeer, true)
+            );
+            return NebulaStorage.mergeMessagesUnique([], aiMsgs)
+                .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
         }
 
-        const deduped = NebulaStorage.mergeMessagesUnique([], allMsgs);
-        const otherRoomMsgs = localMsgs.filter(m =>
-            !messageBelongsToRoom(m, targetRoomId, cleanMine, cleanPeer, isAi)
-        );
-        saveStoredMessages(NebulaStorage.mergeMessagesUnique(otherRoomMsgs, deduped));
+        let cloudMsgs = [];
+        try {
+            cloudMsgs = await NebulaStorage.fetchMessagesFromSupabase(targetRoomId, cleanMine, cleanPeer);
+        } catch (e) {}
 
-        return deduped.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+        const pending = _optimisticMsgs.filter(m =>
+            messageBelongsToRoom(m, targetRoomId, cleanMine, cleanPeer, false)
+        );
+
+        return NebulaStorage.mergeMessagesUnique(cloudMsgs, pending)
+            .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
     }
 
     function openPhotoViewer(url, title) {
@@ -262,7 +260,7 @@ const PageChat = (() => {
         const clean = (peerEmail || '').toLowerCase().trim();
         await NebulaStorage.ensureUserProfile(state, clean);
         await openChatWithTarget(clean);
-        rooms = getAvailableRooms(state, email);
+        rooms = await getAvailableRooms(state, email);
         renderRoomsList();
         selectRoom(activeRoomIdx);
         const searchBox = document.getElementById('chat-researcher-search');
@@ -375,7 +373,7 @@ const PageChat = (() => {
         const clean = (peerEmail || '').toLowerCase().trim();
         let idx = rooms.findIndex(r => (r.peer || '').toLowerCase().trim() === clean);
         if (idx <= 0) {
-            rooms = getAvailableRooms(state, email);
+            rooms = await getAvailableRooms(state, email);
             idx = rooms.findIndex(r => (r.peer || '').toLowerCase().trim() === clean);
             renderRoomsList();
         }
@@ -471,7 +469,7 @@ const PageChat = (() => {
 
         await NebulaStorage.ensureUserProfile(state, clean);
         const affinity = NetworkEngine.compareRepositories(state, emailClean, clean);
-        rooms = getAvailableRooms(state, email);
+        rooms = await getAvailableRooms(state, email);
 
         let idx = rooms.findIndex(r => (r.peer || '').toLowerCase().trim() === clean);
         if (idx <= 0) {
@@ -498,13 +496,12 @@ const PageChat = (() => {
         state = stateObj;
         email = state.current_user;
         emailClean = (email || '').toLowerCase().trim();
-
-        saveStoredMessages(NebulaStorage.mergeMessagesUnique([], getStoredMessages()));
+        _optimisticMsgs = [];
 
         await NebulaStorage.refreshCommunityDirectory(state);
         await NebulaStorage.syncWorkspaceStateAsync(state, email);
 
-        rooms = getAvailableRooms(state, email);
+        rooms = await getAvailableRooms(state, email);
         activeRoomIdx = 0;
 
         if (state.chat_target) {

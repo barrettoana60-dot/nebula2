@@ -93,3 +93,19 @@ CREATE POLICY "Allow public read on user_analytics" ON public.user_analytics FOR
 CREATE POLICY "Allow public insert on user_analytics" ON public.user_analytics FOR INSERT WITH CHECK (true);
 CREATE POLICY "Allow public update on user_analytics" ON public.user_analytics FOR UPDATE USING (true);
 CREATE INDEX IF NOT EXISTS idx_user_analytics_last_seen ON public.user_analytics(last_seen);
+
+-- 7. Configurações globais do app (ex.: chave Groq para IA Llama)
+CREATE TABLE IF NOT EXISTS public.app_settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+ALTER TABLE public.app_settings ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow public read on app_settings" ON public.app_settings FOR SELECT USING (true);
+CREATE POLICY "Allow public upsert on app_settings" ON public.app_settings FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow public update on app_settings" ON public.app_settings FOR UPDATE USING (true);
+
+-- Insira sua chave Groq aqui (substitua YOUR_GROQ_KEY):
+-- INSERT INTO public.app_settings (key, value) VALUES ('groq_api_key', 'YOUR_GROQ_KEY')
+-- ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now();
