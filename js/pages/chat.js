@@ -136,15 +136,11 @@ const PageChat = (() => {
         msgObj.recipient_email = recipientEmail;
 
         const localStore = getStoredMessages();
-        if (!localStore.some(m => m.id === msgObj.id)) {
-            localStore.push(msgObj);
-            saveStoredMessages(localStore);
-        }
+        const mergedLocal = NebulaStorage.mergeMessagesUnique(localStore, [msgObj]);
+        saveStoredMessages(mergedLocal);
 
         if (!state.community_messages) state.community_messages = [];
-        if (!state.community_messages.some(m => m.id === msgObj.id)) {
-            state.community_messages.push(msgObj);
-        }
+        state.community_messages = NebulaStorage.mergeMessagesUnique(state.community_messages, [msgObj]);
         NebulaStorage.saveState(state);
 
         if (!isAi) {
@@ -167,11 +163,8 @@ const PageChat = (() => {
 
         let allMsgs = [];
 
-        getStoredMessages().forEach(m => {
-            if (messageBelongsToRoom(m, targetRoomId, cleanMine, cleanPeer, isAi)) allMsgs.push(m);
-        });
-
-        (state.community_messages || []).forEach(m => {
+        const localMsgs = getStoredMessages();
+        localMsgs.forEach(m => {
             if (messageBelongsToRoom(m, targetRoomId, cleanMine, cleanPeer, isAi)) allMsgs.push(m);
         });
 
@@ -184,14 +177,13 @@ const PageChat = (() => {
             } catch (e) {}
         }
 
-        const uniqueMap = new Map();
-        allMsgs.forEach(m => {
-            if (!m) return;
-            const key = NebulaStorage.messageDedupeKey(m);
-            if (!uniqueMap.has(key)) uniqueMap.set(key, m);
-        });
+        const deduped = NebulaStorage.mergeMessagesUnique([], allMsgs);
+        const otherRoomMsgs = localMsgs.filter(m =>
+            !messageBelongsToRoom(m, targetRoomId, cleanMine, cleanPeer, isAi)
+        );
+        saveStoredMessages(NebulaStorage.mergeMessagesUnique(otherRoomMsgs, deduped));
 
-        return Array.from(uniqueMap.values()).sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+        return deduped.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
     }
 
     function openPhotoViewer(url, title) {

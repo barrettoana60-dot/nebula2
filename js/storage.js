@@ -133,11 +133,7 @@ const NebulaStorage = (() => {
                     };
                     if (myWs.inbox && Array.isArray(myWs.inbox)) {
                         const existingLocal = state.community_messages || [];
-                        const combinedMap = new Map();
-                        [...myWs.inbox, ...existingLocal].forEach(m => {
-                            if (m && m.id) combinedMap.set(m.id, m);
-                        });
-                        state.community_messages = Array.from(combinedMap.values());
+                        state.community_messages = mergeMessagesUnique(existingLocal, myWs.inbox);
                     }
                 }
 
@@ -377,12 +373,27 @@ const NebulaStorage = (() => {
     }
 
     function messageDedupeKey(m) {
-        if (!m) return '';
-        if (m.id) return `id::${m.id}`;
+        if (!m || !m.text) return '';
         const s = (m.sender_email || '').toLowerCase().trim();
-        const t = (m.text || '').trim().slice(0, 120);
-        const ts = Math.floor((m.timestamp || 0) / 4000);
-        return `hash::${s}::${t}::${ts}`;
+        const r = (m.recipient_email || '').toLowerCase().trim();
+        const t = (m.text || '').trim();
+        const ts = m.timestamp || 0;
+        const bucket = Math.floor(ts / 15000);
+        const room = (m.room_id || '').trim();
+        return `msg::${room}::${s}::${r}::${t}::${bucket}`;
+    }
+
+    function mergeMessagesUnique(existing, incoming) {
+        const map = new Map();
+        [...(existing || []), ...(incoming || [])].forEach(m => {
+            if (!m || !m.text) return;
+            const key = messageDedupeKey(m);
+            const prev = map.get(key);
+            if (!prev || (m.id && !prev.id) || (m.delivered && !prev.delivered)) {
+                map.set(key, { ...prev, ...m });
+            }
+        });
+        return Array.from(map.values());
     }
 
     async function saveMessageToSupabase(msg) {
@@ -424,12 +435,7 @@ const NebulaStorage = (() => {
                     .maybeSingle();
 
                 const inbox = [...(ws?.inbox || []), msgWithMeta];
-                const deduped = [];
-                const seen = new Set();
-                inbox.slice(-300).forEach(m => {
-                    const k = m.id || `${m.timestamp}_${m.sender_email}`;
-                    if (!seen.has(k)) { seen.add(k); deduped.push(m); }
-                });
+                const deduped = mergeMessagesUnique([], inbox).slice(-300);
 
                 await window.NebulaSupabase.from('workspaces').upsert({
                     email: userEmail,
@@ -669,15 +675,8 @@ const NebulaStorage = (() => {
                 .eq('email', clean)
                 .maybeSingle();
 
-            const all = [...(myWs?.inbox || []), ...(state.community_messages || [])];
-            const map = new Map();
-            all.forEach(m => {
-                if (m && (m.id || m.text)) {
-                    const k = m.id || `${m.timestamp}_${m.sender_email}_${(m.text || '').slice(0, 30)}`;
-                    map.set(k, m);
-                }
-            });
-            state.community_messages = Array.from(map.values());
+            const all = mergeMessagesUnique(myWs?.inbox || [], state.community_messages || []);
+            state.community_messages = all.slice(-500);
             saveState(state);
             return state.community_messages.filter(m =>
                 (m.recipient_email || '').toLowerCase().trim() === clean ||
@@ -855,6 +854,7 @@ const NebulaStorage = (() => {
         setTypingIndicator,
         getTypingPeers,
         messageDedupeKey,
+        mergeMessagesUnique,
         fetchOnlinePresence,
         pulsePresence,
         isUserOnline,

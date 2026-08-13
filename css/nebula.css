@@ -1174,6 +1174,10 @@ input:disabled + .slider { opacity: 0.5; cursor: not-allowed; }
     margin-top: -44px;
     position: relative;
     z-index: 2;
+    pointer-events: none;
+}
+.mobile-profile-identity * {
+    pointer-events: auto;
 }
 .mobile-profile-left {
     display: flex;
@@ -1943,11 +1947,14 @@ input:disabled + .slider { opacity: 0.5; cursor: not-allowed; }
 
 .mobile-profile-cover {
     position: relative;
+    z-index: 1;
 }
 .prof-cover-btn {
     position: absolute;
     right: 1rem;
     bottom: 1rem;
+    z-index: 20;
+    pointer-events: auto;
     display: inline-flex;
     align-items: center;
     gap: 0.35rem;
