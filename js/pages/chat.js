@@ -369,7 +369,7 @@ const PageChat = (() => {
         _pollTimer = setInterval(loadMessages, 2000);
     }
 
-    function selectPeer(peerEmail) {
+    async function selectPeer(peerEmail) {
         const clean = (peerEmail || '').toLowerCase().trim();
         let idx = rooms.findIndex(r => (r.peer || '').toLowerCase().trim() === clean);
         if (idx <= 0) {
