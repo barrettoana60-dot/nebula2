@@ -355,21 +355,29 @@ const PageChat = (() => {
         const statusEl = document.getElementById('chat-status');
         if (!statusEl) return;
         if (room.kind === 'ai' && _isAiTyping) {
-            statusEl.innerHTML = `<span class="chat-typing-indicator"><span class="chat-typing-dot"></span><span class="chat-typing-dot"></span><span class="chat-typing-dot"></span> Llama 3.3 está escrevendo...</span>`;
+            statusEl.innerHTML = `<div style="display:flex;align-items:center;gap:0.4rem;color:var(--color-blue);font-weight:700;font-size:0.82rem;"><span class="chat-typing-dot"></span><span class="chat-typing-dot"></span><span class="chat-typing-dot"></span> Llama 3.3 está escrevendo...</div>`;
             return;
         }
-        if (room.kind === 'ai') { statusEl.textContent = ''; return; }
+        if (room.kind === 'ai') { statusEl.innerHTML = ''; return; }
+
         const remoteTyping = NebulaStorage.getRemoteTypingPeers(_presenceList, room.id, emailClean);
         const localTyping = NebulaStorage.getTypingPeers(room.id, emailClean);
-        const typingPeers = remoteTyping.length ? remoteTyping : localTyping;
+        const typingPeers = [...new Set([...remoteTyping, ...localTyping])];
         if (typingPeers.length) {
             const peerEmail = typingPeers[0];
             const userKey = NebulaStorage.findUserKey(state, peerEmail);
             const name = userKey ? (state.users[userKey]?.name || room.label) : room.label;
-            statusEl.innerHTML = `<span class="chat-typing-indicator"><span class="chat-typing-dot"></span><span class="chat-typing-dot"></span><span class="chat-typing-dot"></span> ${name.split(' ')[0]} está digitando...</span>`;
-        } else {
-            statusEl.textContent = '';
+            statusEl.innerHTML = `<div style="display:flex;align-items:center;gap:0.4rem;color:#10b981;font-weight:700;font-size:0.82rem;"><span class="chat-typing-dot" style="background:#10b981;"></span><span class="chat-typing-dot" style="background:#10b981;"></span><span class="chat-typing-dot" style="background:#10b981;"></span> ${(name || '').split(' ')[0]} está digitando...</div>`;
+            return;
         }
+
+        const draft = document.getElementById('chat-draft');
+        if (draft && draft.value.trim().length > 0) {
+            statusEl.innerHTML = `<div style="display:flex;align-items:center;gap:0.4rem;color:var(--text-white-60);font-size:0.82rem;"><span class="chat-typing-dot" style="background:var(--color-blue);"></span><span class="chat-typing-dot" style="background:var(--color-blue);"></span><span class="chat-typing-dot" style="background:var(--color-blue);"></span> Você está digitando...</div>`;
+            return;
+        }
+
+        statusEl.innerHTML = '';
     }
 
     function selectRoom(i) {
@@ -659,6 +667,7 @@ const PageChat = (() => {
             if (room && room.kind === 'direct') {
                 NebulaStorage.setTypingIndicator(room.id, emailClean);
             }
+            if (room) renderTypingIndicator(room);
         };
 
         chatDraft.addEventListener('input', triggerTyping);
@@ -800,5 +809,5 @@ const PageChat = (() => {
         });
     }
 
-    return { render, selectRoom, selectPeer, buildRoomId, getStoredMessages, saveStoredMessages, openChatWithTarget, startChatWith, openPhotoViewer };
+    return { render, selectRoom, selectPeer, buildRoomId, getStoredMessages, saveStoredMessages, openChatWithTarget, startChatWith, openPhotoViewer, loadMessages, renderRoomsList };
 })();
