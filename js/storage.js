@@ -597,6 +597,7 @@ const NebulaStorage = (() => {
     async function saveMessageToSupabase(msg) {
         if (!window.NebulaSupabase || !msg || !msg.text) return false;
         const sender = (msg.sender_email || '').toLowerCase().trim();
+        const recipient = (msg.recipient_email || '').toLowerCase().trim();
         try {
             const { data: existing } = await window.NebulaSupabase
                 .from('community_messages')
@@ -616,9 +617,11 @@ const NebulaStorage = (() => {
                 room_id: msg.room_id,
                 room_label: msg.room_label || '',
                 sender_email: sender,
+                recipient_email: recipient,
                 sender_name: msg.sender_name || '',
                 text: msg.text,
-                timestamp: msg.timestamp || Date.now()
+                timestamp: msg.timestamp || Date.now(),
+                delivered: true
             });
             return true;
         } catch (e) {
@@ -1010,13 +1013,20 @@ const NebulaStorage = (() => {
         const peer = (peerEmail || '').toLowerCase().trim();
         if (sender !== me) return null;
 
+        // Check if peer has read this room via presence (real-time)
         const peerPresence = (presenceList || []).find(p => p.email === peer);
         const readAt = peerPresence?.read_rooms?.[roomId] || 0;
-        if (readAt && readAt >= (msg.timestamp || 0)) return 'read';
+        const msgTs = msg.timestamp || msg.created_at ? new Date(msg.created_at || msg.timestamp).getTime() : 0;
+        if (readAt && readAt >= msgTs) return 'read';
+
+        // Peer is currently online in this room = seen
+        if (peerPresence && peerPresence.typing_room === roomId) return 'read';
 
         const readBy = msg.read_by || [];
         if (readBy.includes(peer)) return 'read';
-        if (msg.delivered) return 'delivered';
+
+        // Message was saved to supabase = delivered
+        if (msg.delivered || msg.id) return 'delivered';
         return 'sent';
     }
 

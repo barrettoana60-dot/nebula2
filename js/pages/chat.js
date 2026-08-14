@@ -390,10 +390,13 @@ const PageChat = (() => {
         const room = rooms[activeRoomIdx];
         if (!room) return;
 
-        _presenceList = await NebulaStorage.fetchOnlinePresence();
+        const newPresence = await NebulaStorage.fetchOnlinePresence();
+        const presenceChanged = JSON.stringify(newPresence) !== JSON.stringify(_presenceList);
+        _presenceList = newPresence;
+
         if (room.kind === 'direct') {
             NebulaStorage.markRoomMessagesRead(state, emailClean, room.peer, room.id);
-            NebulaStorage.pulsePresence(emailClean, null);
+            NebulaStorage.pulsePresence(emailClean, null, room.id);
         }
 
         const msgs = await getRoomMessages(room.id, email, room.peer);
@@ -401,11 +404,12 @@ const PageChat = (() => {
         if (!msgContainer) return;
 
         const lastMsg = msgs[msgs.length - 1];
-        const currentHash = msgs.length + '::' + (lastMsg?.id || '') + '::' + (lastMsg?.timestamp || '') + '::' + (lastMsg?.text || '').slice(-20);
+        const currentHash = msgs.length + '::' + (lastMsg?.id || '') + '::' + (lastMsg?.timestamp || '') + '::' + (lastMsg?.text || '').slice(-20) + '::' + _presenceList.length;
 
         renderTypingIndicator(room);
+        renderHeader(room);
 
-        if (currentHash !== lastRenderedHash) {
+        if (currentHash !== lastRenderedHash || presenceChanged) {
             lastRenderedHash = currentHash;
             const atBottom = msgContainer.scrollHeight - msgContainer.scrollTop - msgContainer.clientHeight < 160;
             renderMsgs(room, msgs);
@@ -450,11 +454,11 @@ const PageChat = (() => {
             const msgStatus = isMe && !isAi ? NebulaStorage.getMessageStatus(msg, emailClean, room.peer, _presenceList, room.id) : null;
             let statusHtml = '';
             if (msgStatus === 'read') {
-                statusHtml = `<span style="color:#3b82f6;font-weight:800;font-size:0.8rem;letter-spacing:-1px;" title="Visualizado">✓✓</span>`;
+                statusHtml = `<span style="color:#3b82f6;font-weight:800;font-size:0.82rem;letter-spacing:-1.5px;" title="Visualizado">✓✓</span>`;
             } else if (msgStatus === 'delivered') {
-                statusHtml = `<span style="color:var(--text-white-60);font-weight:800;font-size:0.8rem;letter-spacing:-1px;" title="Entregue">✓✓</span>`;
+                statusHtml = `<span style="color:rgba(255,255,255,0.5);font-weight:800;font-size:0.82rem;letter-spacing:-1.5px;" title="Entregue">✓✓</span>`;
             } else if (msgStatus === 'sent') {
-                statusHtml = `<span style="color:var(--text-white-60);font-weight:700;font-size:0.8rem;" title="Enviado">✓</span>`;
+                statusHtml = `<span style="color:rgba(255,255,255,0.4);font-weight:700;font-size:0.82rem;" title="Enviado">✓</span>`;
             }
 
             // Determine which photo to show for sender avatar

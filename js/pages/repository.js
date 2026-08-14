@@ -958,11 +958,15 @@ const PageRepository = (() => {
                 <div style="display:flex; justify-content:space-between; align-items:center; padding:1.2rem 2rem; border-bottom:1px solid rgba(0,0,0,0.08); background:rgba(218,200,179,0.7);">
                     <div>
                         <div style="font-size:1.15rem; font-weight:700; color:var(--text-white);">${doc.name}</div>
-                        <div style="font-size:0.8rem; color:var(--text-white-60); margin-top:0.2rem;">
+                        <div style="font-size:0.8rem; color:var(--text-white-60); margin-top:0.2rem;" data-doc-meta>
                             Autor: ${doc.author || 'Desconhecido'} · Ano: ${doc.year || '?'} · Tópico: ${doc.topic}
                         </div>
                     </div>
                     <button id="reader-close-btn" style="background:rgba(218,200,179,0.5); border:1px solid rgba(0,0,0,0.12); color:var(--text-white); border-radius:50%; width:38px; height:38px; display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:1.1rem; transition:all 0.18s;">✕</button>
+                </div>
+                <!-- READING PROGRESS BAR -->
+                <div id="reader-progress-bar-wrap" style="height:3px; background:rgba(0,0,0,0.08); position:relative;">
+                    <div id="reader-progress-bar-fill" style="height:100%; background:linear-gradient(90deg,#f97316,#3b82f6); width:0%; transition:width 0.2s ease;"></div>
                 </div>
 
                 <!-- MAIN WORKSPACE -->
@@ -994,11 +998,11 @@ const PageRepository = (() => {
                         <!-- CONTROLS FOOTER -->
                         <div style="display:flex; justify-content:space-between; align-items:center; padding:0.8rem 2rem; border-top:1px solid rgba(0,0,0,0.08); background:rgba(218,200,179,0.7); gap:1rem; flex-wrap:wrap;">
                             <div style="display:flex; align-items:center; gap:0.5rem;">
-                                <span class="tag tag-copper" style="font-size:0.75rem; font-weight:700;">📜 Rolamento Contínuo Ativo</span>
                                 <span id="reader-page-indicator" style="font-size:0.85rem; font-weight:600; color:var(--text-white-80);">${doc.pages.length} páginas</span>
+                                <span id="reader-current-page" style="font-size:0.82rem; color:var(--color-blue); font-weight:700;"></span>
                             </div>
                             <div style="display:flex; align-items:center; gap:0.6rem;">
-                                <button class="btn btn-sm" onclick="navigator.clipboard.writeText('${(doc.author||'AUTOR').toUpperCase()}, ${(doc.author||'Nome')}. ${(doc.name||'Título')}. ${(doc.topic||'Área')}, ${doc.year||'2024'}.'); alert('Citação ABNT copiada para a área de transferência!');" style="font-size:0.75rem;">📋 Copiar Citação ABNT</button>
+                                <button class="btn btn-sm" onclick="navigator.clipboard.writeText('${(doc.author||'AUTOR').toUpperCase()}, ${(doc.author||'Nome')}. ${(doc.name||'Título')}. ${(doc.topic||'Área')}, ${doc.year||'2024'}.'); alert('Citação ABNT copiada!');" style="font-size:0.75rem;">📋 Citação ABNT</button>
                                 <span style="color:var(--text-white-60); font-size:0.8rem;">Ir p/ página:</span>
                                 <input id="reader-page-jump" type="number" min="1" max="${doc.pages.length}" style="width:55px; background:rgba(255,255,255,0.5); border:1px solid rgba(0,0,0,0.15); border-radius:7px; color:var(--text-white); padding:0.25rem 0.4rem; font-size:0.82rem; text-align:center; outline:none;" placeholder="#">
                             </div>
@@ -1184,9 +1188,46 @@ const PageRepository = (() => {
             window._readerGoToPage = (num) => {
                 const el = document.getElementById(`page-block-${num}`);
                 if (el) {
-                    el.scrollIntoView({ behavior: 'smooth' });
+                    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    currentPageIndex = doc.pages.findIndex(p => p.number === num);
+                    if (currentPageIndex < 0) currentPageIndex = num - 1;
+                    loadSidebar();
                 }
             };
+
+            // Track scroll position to update sidebar active page and progress bar
+            const scrollZone = document.getElementById('reader-scroll-zone');
+            const progressFill = document.getElementById('reader-progress-bar-fill');
+            const currentPageEl = document.getElementById('reader-current-page');
+            if (scrollZone) {
+                scrollZone.addEventListener('scroll', () => {
+                    // Update progress bar
+                    const scrollPct = scrollZone.scrollTop / Math.max(1, scrollZone.scrollHeight - scrollZone.clientHeight);
+                    if (progressFill) progressFill.style.width = Math.round(scrollPct * 100) + '%';
+
+                    // Find which page is currently visible
+                    const pageBlocks = Array.from(document.querySelectorAll('.abnt-page-block'));
+                    let visiblePage = null;
+                    for (const block of pageBlocks) {
+                        const rect = block.getBoundingClientRect();
+                        if (rect.top <= window.innerHeight * 0.5 && rect.bottom > 0) {
+                            visiblePage = block;
+                        }
+                    }
+                    if (visiblePage) {
+                        const pageNum = parseInt(visiblePage.id.replace('page-block-', ''));
+                        const newIdx = doc.pages.findIndex(p => p.number === pageNum);
+                        if (newIdx !== -1 && newIdx !== currentPageIndex) {
+                            currentPageIndex = newIdx;
+                            if (currentPageEl) currentPageEl.textContent = `· Pág. ${pageNum}/${doc.pages.length}`;
+                            // Update active sidebar button
+                            document.querySelectorAll('.reader-sidebar-btn').forEach((b, i) => {
+                                b.classList.toggle('active', i === currentPageIndex);
+                            });
+                        }
+                    }
+                });
+            }
 
             window._readerDeleteHighlight = async (index) => {
                 if (confirm('Deseja remover este destaque do repositório? (A nota citada no Doc permanecerá intacta).')) {
@@ -1204,6 +1245,7 @@ const PageRepository = (() => {
                 document.getElementById('reader-tab-pages').style.fontWeight = '600';
                 document.getElementById('reader-tab-highlights').style.borderBottomColor = 'transparent';
                 document.getElementById('reader-tab-highlights').style.color = 'var(--text-white-60)';
+                document.getElementById('reader-tab-highlights').style.fontWeight = 'normal';
                 loadSidebar();
             });
 
@@ -1214,16 +1256,26 @@ const PageRepository = (() => {
                 document.getElementById('reader-tab-highlights').style.fontWeight = '600';
                 document.getElementById('reader-tab-pages').style.borderBottomColor = 'transparent';
                 document.getElementById('reader-tab-pages').style.color = 'var(--text-white-60)';
+                document.getElementById('reader-tab-pages').style.fontWeight = 'normal';
                 loadSidebar();
             });
 
-            // Navigation events
-            document.getElementById('reader-prev-btn').addEventListener('click', () => {
-                if (currentPageIndex > 0) { currentPageIndex--; loadPage(); }
-            });
-            document.getElementById('reader-next-btn').addEventListener('click', () => {
-                if (currentPageIndex < doc.pages.length - 1) { currentPageIndex++; loadPage(); }
-            });
+            // Keyboard shortcuts for page navigation
+            const keyHandler = (e) => {
+                if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
+                if (e.key === 'ArrowDown' || e.key === 'PageDown') {
+                    if (currentPageIndex < doc.pages.length - 1) {
+                        window._readerGoToPage(doc.pages[currentPageIndex + 1].number);
+                    }
+                } else if (e.key === 'ArrowUp' || e.key === 'PageUp') {
+                    if (currentPageIndex > 0) {
+                        window._readerGoToPage(doc.pages[currentPageIndex - 1].number);
+                    }
+                } else if (e.key === 'Escape') {
+                    closeModal();
+                }
+            };
+            document.addEventListener('keydown', keyHandler);
 
             // Page jump input
             const pageJumpInput = document.getElementById('reader-page-jump');
@@ -1252,6 +1304,17 @@ const PageRepository = (() => {
             document.getElementById('reader-close-btn').addEventListener('click', closeModal);
             modal.addEventListener('click', (e) => {
                 if (e.target === modal) closeModal();
+            });
+
+            // Cleanup keyboard handler on close
+            const origClose = closeModal;
+            const closeModal2 = () => {
+                document.removeEventListener('keydown', keyHandler);
+                origClose();
+            };
+            document.getElementById('reader-close-btn').onclick = closeModal2;
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) closeModal2();
             });
 
             // Highlight Tooltip event listener on Selection

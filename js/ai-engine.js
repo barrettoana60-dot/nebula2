@@ -71,31 +71,43 @@ const NebulaAI = (() => {
         ];
 
         for (const currentModel of [...new Set(modelsToTry)]) {
-            const payload = {
+            // Try with response_format first (if requested), then without
+            const attemptsPayloads = [];
+            const basePayload = {
                 model: currentModel,
                 messages,
                 temperature: options.temperature ?? 0.7,
                 max_tokens: options.max_tokens ?? 1500
             };
-            if (options.response_format) payload.response_format = options.response_format;
+            if (options.response_format) {
+                attemptsPayloads.push({ ...basePayload, response_format: options.response_format });
+                attemptsPayloads.push({ ...basePayload }); // without response_format as fallback
+            } else {
+                attemptsPayloads.push(basePayload);
+            }
 
-            try {
-                const response = await fetch(cfg.url, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${key}`
-                    },
-                    body: JSON.stringify(payload)
-                });
+            for (const payload of attemptsPayloads) {
+                try {
+                    const response = await fetch(cfg.url, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${key}`
+                        },
+                        body: JSON.stringify(payload)
+                    });
 
-                if (response.ok) {
-                    const data = await response.json();
-                    const reply = data.choices?.[0]?.message?.content || null;
-                    if (reply) return reply;
+                    if (response.ok) {
+                        const data = await response.json();
+                        const reply = data.choices?.[0]?.message?.content || null;
+                        if (reply) return reply;
+                    } else if (response.status === 400 && options.response_format) {
+                        // json_object not supported by this model — try without it
+                        continue;
+                    }
+                } catch (err) {
+                    console.warn(`[NebulaAI] model ${currentModel} failed:`, err);
                 }
-            } catch (err) {
-                console.warn(`[NebulaAI] Fallback model ${currentModel} failed:`, err);
             }
         }
         return null;
@@ -142,10 +154,18 @@ const NebulaAI = (() => {
             [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPrompt }],
             { temperature: 0.35, max_tokens: 2500, response_format: { type: 'json_object' } }
         );
-        if (!content) return null;
+        if (!content) return generateLocalDocAnalysis(text, fileName, fileKind);
 
         try {
-            let cleaned = content.trim().replace(/^```(?:json)?\s*/, '').replace(/\s*```$/, '');
+            let cleaned = content.trim();
+            // Remove markdown code fences if present
+            cleaned = cleaned.replace(/^```(?:json)?\s*/m, '').replace(/\s*```\s*$/m, '');
+            // Find first { to last } to extract JSON
+            const jsonStart = cleaned.indexOf('{');
+            const jsonEnd = cleaned.lastIndexOf('}');
+            if (jsonStart !== -1 && jsonEnd !== -1) {
+                cleaned = cleaned.slice(jsonStart, jsonEnd + 1);
+            }
             const result = JSON.parse(cleaned);
             const normalized = {
                 summary: result.summary || null,
@@ -165,7 +185,7 @@ const NebulaAI = (() => {
             return normalized;
         } catch (e) {
             console.error('[NebulaAI] Failed to parse analysis JSON:', e);
-            return null;
+            return generateLocalDocAnalysis(text, fileName, fileKind);
         }
     }
 
@@ -177,6 +197,53 @@ const NebulaAI = (() => {
             hash |= 0;
         }
         return 'ai_' + hash.toString(36);
+    }
+
+    function generateLocalDocAnalysis(text, fileName, fileKind) {
+        // Extract year from text
+        const yearMatch = (text || '').match(/\b(19[5-9]\d|20[0-3]\d)\b/);
+        const year = yearMatch ? parseInt(yearMatch[0]) : null;
+
+        // Extract keywords — most frequent meaningful words
+        const words = (text || '').toLowerCase()
+            .replace(/[^a-záàâãéêíóôõúç\s]/g, ' ')
+            .split(/\s+/)
+            .filter(w => w.length > 5);
+        const freq = {};
+        words.forEach(w => freq[w] = (freq[w] || 0) + 1);
+        const keywords = Object.entries(freq)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 10)
+            .map(e => e[0]);
+
+        // Try to guess language
+        const ptWords = ['que', 'uma', 'para', 'com', 'são', 'dos', 'das'];
+        const enWords = ['the', 'and', 'for', 'with', 'are', 'this', 'that'];
+        const textLower = (text || '').toLowerCase();
+        const ptCount = ptWords.filter(w => textLower.includes(w)).length;
+        const enCount = enWords.filter(w => textLower.includes(w)).length;
+        const language = ptCount >= enCount ? 'Português' : 'Inglês';
+
+        // Build a summary from first 500 chars
+        const cleanText = (text || '').replace(/\s+/g, ' ').trim();
+        const summary = cleanText.length > 50
+            ? cleanText.slice(0, 500) + (cleanText.length > 500 ? '...' : '')
+            : 'Resumo não disponível para este documento.';
+
+        return {
+            summary,
+            author: 'Desconhecido',
+            year,
+            language,
+            topic: (fileName || '').replace(/\.[^/.]+$/, '') || 'Pesquisa Geral',
+            keywords,
+            nationality: language === 'Português' ? 'Brasil/Portugal' : 'Internacional',
+            document_type: fileKind || 'Documento',
+            key_findings: null,
+            methodology: null,
+            deep_insight: 'Análise local — para uma análise completa com IA, utilize o botão Reanalisar.',
+            ai_analyzed: false
+        };
     }
 
     async function analyzeImage(base64Image, userResearch, query) {
