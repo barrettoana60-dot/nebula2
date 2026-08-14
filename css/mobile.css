@@ -1,0 +1,427 @@
+/* ═══════════════════════════════════════════════════════════
+   NEBULA MOBILE — estilo HI Social App (≤768px)
+   Desktop usa nebula.css; mobile sobrescreve com layout app
+   ═══════════════════════════════════════════════════════════ */
+
+.mobile-header { display: none; }
+
+@media (max-width: 768px) {
+    /* ── Base app shell ── */
+    .layout-mobile {
+        background: #DAC8B3;
+    }
+    .layout-mobile .app-root::before {
+        background: radial-gradient(ellipse 120% 60% at 50% -10%, rgba(249,115,22,0.08) 0%, #DAC8B3 55%);
+    }
+    .layout-mobile .orb { display: none; }
+
+    /* Esconde navbar desktop por completo */
+    .layout-mobile #navbar {
+        display: none !important;
+    }
+
+    /* Header fixo minimalista */
+    .layout-mobile .mobile-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 1000;
+        height: calc(52px + env(safe-area-inset-top, 0px));
+        padding: env(safe-area-inset-top, 0px) 1.1rem 0;
+        background: rgba(218, 200, 179, 0.45);
+        backdrop-filter: blur(24px);
+        -webkit-backdrop-filter: blur(24px);
+        border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+    }
+    .mobile-header-title {
+        font-size: 1.05rem;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        color: #1a1d24;
+    }
+    .mobile-header-actions {
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+    }
+    .mobile-hdr-btn {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        border: 1px solid rgba(0, 0, 0, 0.08);
+        background: rgba(218, 200, 179, 0.45);
+        color: rgba(29, 32, 38, 0.9);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+        padding: 0;
+        transition: background 0.15s;
+    }
+    .mobile-hdr-btn:active { background: rgba(218, 200, 179, 0.25); }
+    .mobile-hdr-btn svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 1.8; }
+    .mobile-hdr-avatar {
+        display: none !important;
+    }
+
+    /* Área de conteúdo */
+    .layout-mobile .page-container {
+        padding: calc(60px + env(safe-area-inset-top, 0px)) 0 calc(88px + env(safe-area-inset-bottom, 0px));
+        max-width: 100%;
+        overflow-x: hidden;
+    }
+    .layout-mobile .page-container > *:not(.mobile-profile-hero) {
+        margin-left: 1rem;
+        margin-right: 1rem;
+    }
+
+    /* Esconde títulos desktop duplicados */
+    .layout-mobile .page-container > .page-title,
+    .layout-mobile .page-container > .page-sub,
+    .layout-mobile .profile-desktop-title {
+        display: none !important;
+    }
+    .layout-mobile .mobile-visible-sub {
+        display: block !important;
+        margin: 0 1rem 1rem;
+        font-size: 0.82rem;
+        color: var(--text-white-60);
+    }
+    .layout-mobile #welcome-banner .page-title {
+        display: block !important;
+        font-size: 1.35rem;
+        margin-bottom: 0.25rem;
+    }
+
+    /* Grids → coluna única */
+    .layout-mobile .grid-2,
+    .layout-mobile .grid-3,
+    .layout-mobile .grid-60-40 {
+        grid-template-columns: 1fr !important;
+        gap: 0.85rem;
+    }
+
+    /* Métricas horizontais estilo feed */
+    .layout-mobile .metric-grid {
+        display: flex;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        gap: 0.65rem;
+        margin: 0 0 1rem;
+        padding: 0 1rem;
+        scrollbar-width: none;
+        -webkit-overflow-scrolling: touch;
+    }
+    .layout-mobile .metric-grid::-webkit-scrollbar { display: none; }
+    .layout-mobile .metric-grid > * {
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+    }
+    .layout-mobile .metric-card {
+        min-width: 130px;
+        flex-shrink: 0;
+        margin-bottom: 0;
+        border-radius: 20px;
+        padding: 1rem;
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.07);
+        box-shadow: none;
+    }
+    .layout-mobile .metric-value { font-size: 1.45rem; }
+    .layout-mobile .metric-label { font-size: 0.65rem; margin-bottom: 0.4rem; }
+
+    /* Cards glass → pills escuros */
+    .layout-mobile .glass,
+    .layout-mobile .glass-sm,
+    .layout-mobile .glass-outer,
+    .layout-mobile .doc-card,
+    .layout-mobile .article-card {
+        border-radius: 22px;
+        padding: 1.1rem;
+        margin-bottom: 0.85rem;
+        background: rgba(255, 255, 255, 0.035);
+        border: 1px solid rgba(255, 255, 255, 0.07);
+        box-shadow: none;
+        animation: none;
+    }
+    .layout-mobile .glass:hover,
+    .layout-mobile .doc-card:hover,
+    .layout-mobile .article-card:hover {
+        transform: none;
+    }
+
+    /* Tags pill estilo social */
+    .layout-mobile .tag {
+        border-radius: 999px;
+        padding: 0.35rem 0.75rem;
+        font-size: 0.72rem;
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    /* Botões */
+    .layout-mobile .btn {
+        border-radius: 999px;
+        min-height: 48px;
+        font-weight: 600;
+    }
+    .layout-mobile .input,
+    .layout-mobile .textarea,
+    .layout-mobile .select {
+        border-radius: 18px;
+        font-size: 16px;
+        background: rgba(255, 255, 255, 0.04);
+        border-color: rgba(255, 255, 255, 0.08);
+    }
+
+    /* Tabs horizontais pill */
+    .layout-mobile .tabs-bar {
+        flex-direction: row !important;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        gap: 0.45rem;
+        padding: 0.25rem 0 0.5rem;
+        scrollbar-width: none;
+        border-bottom: none;
+    }
+    .layout-mobile .tab-btn {
+        flex-shrink: 0;
+        border-radius: 999px;
+        white-space: nowrap;
+        padding: 0.5rem 1rem;
+        font-size: 0.8rem;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        background: rgba(255, 255, 255, 0.03);
+    }
+    .layout-mobile .tab-btn.active {
+        background: rgba(255, 255, 255, 0.1);
+        border-color: rgba(255, 255, 255, 0.15);
+    }
+
+    .layout-mobile .section-title {
+        font-size: 0.95rem;
+        margin-bottom: 0.75rem;
+    }
+
+    /* Welcome banner mobile */
+    .layout-mobile .welcome-banner {
+        margin: 0 1rem 0.5rem;
+        max-height: none;
+    }
+    .layout-mobile .page-sub {
+        margin: 0 1rem 1rem;
+        font-size: 0.82rem;
+        color: var(--text-white-60);
+    }
+
+    /* ── Bottom nav: 4 ícones, sem texto (referência) ── */
+    .layout-mobile .mobile-bottom-nav {
+        display: flex !important;
+        position: fixed;
+        bottom: calc(0.65rem + env(safe-area-inset-bottom, 0px));
+        left: 50%;
+        transform: translateX(-50%);
+        width: min(calc(100% - 2rem), 340px);
+        align-items: center;
+        justify-content: space-evenly;
+        padding: 0.55rem 1.25rem;
+        background: rgba(218, 200, 179, 0.45);
+        backdrop-filter: blur(32px);
+        -webkit-backdrop-filter: blur(32px);
+        border: 1px solid rgba(0, 0, 0, 0.08);
+        border-radius: 999px;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.05);
+        z-index: 1001;
+        gap: 0;
+    }
+    .mobile-nav-item {
+        width: 48px;
+        height: 48px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: none;
+        background: transparent;
+        color: rgba(29, 32, 38, 0.45);
+        cursor: pointer;
+        border-radius: 50%;
+        transition: all 0.18s ease;
+        padding: 0;
+        flex: none;
+    }
+    .mobile-nav-item span:not(.mobile-nav-avatar) { display: none; }
+    .mobile-nav-item svg {
+        width: 24px;
+        height: 24px;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 1.7;
+    }
+    .mobile-nav-item.active {
+        color: #1a1d24;
+        background: rgba(218, 200, 179, 0.55);
+    }
+    .mobile-nav-avatar {
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, var(--copper-1), var(--copper-2));
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.8rem;
+        font-weight: 700;
+        color: #fff;
+        border: 2px solid rgba(0, 0, 0, 0.15);
+        overflow: hidden;
+    }
+    .mobile-nav-item.active .mobile-nav-avatar {
+        border-color: var(--color-orange);
+        box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.5);
+    }
+
+    /* More sheet */
+    .layout-mobile .mobile-more-sheet {
+        display: block;
+        position: fixed;
+        inset: 0;
+        z-index: 10002;
+        pointer-events: none;
+        visibility: hidden;
+    }
+    .layout-mobile .mobile-more-sheet.open {
+        pointer-events: auto;
+        visibility: visible;
+    }
+    .mobile-more-backdrop {
+        position: absolute;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.35);
+        backdrop-filter: blur(8px);
+        opacity: 0;
+        transition: opacity 0.25s;
+    }
+    .mobile-more-sheet.open .mobile-more-backdrop { opacity: 1; }
+    .mobile-more-panel {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: #DAC8B3;
+        border-radius: 28px 28px 0 0;
+        border-top: 1px solid rgba(0, 0, 0, 0.08);
+        padding: 0.6rem 1.25rem calc(1.5rem + env(safe-area-inset-bottom, 0px));
+        transform: translateY(100%);
+        transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .mobile-more-sheet.open .mobile-more-panel { transform: translateY(0); }
+    .mobile-more-handle {
+        width: 36px;
+        height: 4px;
+        background: rgba(0, 0, 0, 0.15);
+        border-radius: 99px;
+        margin: 0 auto 1.1rem;
+    }
+    .mobile-more-title {
+        font-size: 0.68rem;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: rgba(29, 32, 38, 0.45);
+        font-weight: 600;
+        margin-bottom: 0.85rem;
+    }
+    .mobile-more-item {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        gap: 0.85rem;
+        padding: 1rem 1.1rem;
+        margin-bottom: 0.45rem;
+        border: 1px solid rgba(0, 0, 0, 0.08);
+        border-radius: 18px;
+        background: rgba(218, 200, 179, 0.55);
+        color: #1a1d24;
+        font-size: 0.95rem;
+        font-weight: 500;
+        cursor: pointer;
+        font-family: inherit;
+        text-align: left;
+    }
+    .mobile-more-item.mobile-more-danger { color: #b91c1c; border-color: rgba(239, 68, 68, 0.2); }
+    .mobile-more-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 12px;
+        background: rgba(0, 0, 0, 0.05);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1rem;
+        flex-shrink: 0;
+    }
+
+    /* Dropdowns fixos acima da bottom bar */
+    .layout-mobile #accountDropdown,
+    .layout-mobile #bellDropdown,
+    .layout-mobile #mobileBellDropdown {
+        position: fixed !important;
+        left: 1rem !important;
+        right: 1rem !important;
+        width: auto !important;
+        top: auto !important;
+        bottom: calc(82px + env(safe-area-inset-bottom, 0px)) !important;
+        border-radius: 22px !important;
+    }
+
+
+
+    /* Pesquisa mobile */
+    .layout-mobile .file-drop {
+        border-radius: 18px;
+        min-height: 80px;
+    }
+    .layout-mobile .article-card .article-abstract {
+        font-size: 0.82rem;
+        line-height: 1.45;
+    }
+
+    /* Editor / análise */
+    .layout-mobile #editor-toolbar {
+        flex-wrap: wrap;
+        gap: 0.35rem;
+        justify-content: flex-start;
+    }
+    .layout-mobile #mindmap-wrap,
+    .layout-mobile #mindmap-canvas {
+        border-radius: 18px;
+        max-width: 100%;
+    }
+
+    /* Auth mobile */
+    .layout-mobile .hero-container {
+        min-height: 100vh;
+        padding: 1.5rem 1rem;
+        justify-content: center;
+    }
+    .layout-mobile .hero-title { font-size: 2rem; }
+    .layout-mobile .hero-inner-panel { border-radius: 28px; }
+
+    /* Neutraliza regras conflitantes do nebula.css */
+    .layout-mobile .nav-shell {
+        flex-direction: row !important;
+        height: auto !important;
+        margin: 0 !important;
+    }
+    .layout-mobile .tabs-bar { flex-direction: row !important; }
+}
+
+@media (min-width: 769px) {
+    .mobile-header,
+    .mobile-bottom-nav,
+    .mobile-more-sheet { display: none !important; }
+}

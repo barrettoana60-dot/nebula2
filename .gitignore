@@ -1,0 +1,10 @@
+node_modules/
+.env
+.env.local
+.env.*
+!.env.example
+.DS_Store
+Thumbs.db
+nebula_research_db.json
+nebula_research_flutter/
+scratch/
