@@ -431,7 +431,7 @@ Com base nesses dados, recomende 5 obras REAIS e ESPECÍFICAS que estão FALTAND
         // Doc Types Breakdown & Legends
         const docTypesCount = {};
         docs.forEach(d => {
-            const t = d.document_type || d.kind || 'Artigo Periódico';
+            const t = DocumentEngine.normalizeDocType(d.document_type || d.kind || 'Artigo Periódico');
             docTypesCount[t] = (docTypesCount[t] || 0) + 1;
         });
 

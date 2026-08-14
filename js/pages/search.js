@@ -1,7 +1,7 @@
 /* PAGE: SEARCH */
 const PageSearch = (() => {
 
-    const ACADEMIC_SOURCES = ['SciELO', 'OpenAlex', 'Semantic Scholar', 'Crossref', 'DOAJ', 'Europe PMC'];
+    const ACADEMIC_SOURCES = ['SciELO', 'OpenAlex', 'Semantic Scholar', 'Crossref', 'DOAJ', 'Europe PMC', 'arXiv', 'PubMed'];
     const SUGGESTED_TERMS = [
         'Inteligência Artificial', 'Saúde Pública', 'NLP e Transformers', 
         'Visão Computacional', 'Ciência de Dados na Educação', 'Blockchain e Criptografia', 
@@ -133,7 +133,7 @@ const PageSearch = (() => {
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem; flex-wrap:wrap; gap:1rem;">
                 <div>
                     <div class="page-title">Pesquisa Inteligente &amp; Qualis CAPES</div>
-                    <div class="page-sub" style="margin-bottom:0">Busca em artigos acadêmicos globais (OpenAlex, SciELO, DOAJ, Semantic Scholar) com classificação Qualis</div>
+                    <div class="page-sub" style="margin-bottom:0">Busca em 8 bases acadêmicas globais (SciELO, OpenAlex, Semantic Scholar, Crossref, DOAJ, Europe PMC, arXiv, PubMed) com estimativa de Qualis</div>
                 </div>
                 <button class="btn btn-blue" onclick="NebulaApp.renderPage()" style="gap:0.4rem; padding: 0.5rem 1rem;">
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>

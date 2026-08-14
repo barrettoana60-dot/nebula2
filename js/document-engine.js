@@ -291,6 +291,31 @@ const DocumentEngine = (() => {
         });
     }
 
+    const DOC_TYPE_ALIASES = [
+        { match: ['tese', 'doctoral', 'phd thesis', 'doutorado'], label: 'Tese de Doutorado' },
+        { match: ['disserta', 'master', 'mestrado'], label: 'Dissertação de Mestrado' },
+        { match: ['monografia', 'tcc', 'undergraduate'], label: 'Monografia / TCC' },
+        { match: ['congresso', 'conference', 'proceedings', 'anais', 'simposio', 'simpósio'], label: 'Trabalho em Congresso' },
+        { match: ['livro', 'book', 'chapter', 'capítulo', 'capitulo'], label: 'Livro / Capítulo' },
+        { match: ['relatório', 'relatorio', 'report'], label: 'Relatório Técnico' },
+        { match: ['projeto', 'project proposal'], label: 'Projeto de Pesquisa' },
+        { match: ['dataset', 'planilha', 'spreadsheet', 'csv', 'dados'], label: 'Dataset / Planilha' },
+        { match: ['figura', 'imagem', 'image', 'figure', 'foto'], label: 'Figura Científica' },
+        { match: ['script', 'código', 'codigo', 'code'], label: 'Script / Código' },
+        { match: ['artigo', 'article', 'journal', 'paper', 'periódico', 'periodico'], label: 'Artigo Periódico' }
+    ];
+
+    function normalizeDocType(rawType) {
+        const raw = (rawType || '').toString().trim();
+        if (!raw) return 'Artigo Periódico';
+        const lower = raw.toLowerCase();
+        for (const alias of DOC_TYPE_ALIASES) {
+            if (alias.match.some(m => lower.includes(m))) return alias.label;
+        }
+        if (['pdf', 'docx', 'doc', 'txt', 'texto'].includes(lower)) return 'Artigo Periódico';
+        return raw;
+    }
+
     function detectAcademicDocType(text, fileName, kind) {
         const t = (text || '').toLowerCase();
         const f = (fileName || '').toLowerCase();
@@ -375,7 +400,7 @@ const DocumentEngine = (() => {
         // 3. Usar dados da IA se disponíveis, senão fallback para TextEngine local
         let keywords, topic, summary, author, language, nationality, year;
         const autoAcademicType = detectAcademicDocType(text, fileName, kind);
-        let docType = aiData ? aiData.document_type || autoAcademicType : autoAcademicType;
+        let docType = normalizeDocType(aiData ? aiData.document_type || autoAcademicType : autoAcademicType);
         let keyFindings = null;
         let methodology = null;
         let refCount = 0;
@@ -462,7 +487,7 @@ const DocumentEngine = (() => {
 
     return {
         extractTextFromPDF, extractTextFromDOCX,
-        fileKind, makeDocumentRecord, generateUUID,
+        fileKind, makeDocumentRecord, generateUUID, normalizeDocType,
         relatedDocuments, localSearch,
         analyzeImage,
     };

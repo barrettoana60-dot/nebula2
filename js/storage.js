@@ -217,12 +217,8 @@ const NebulaStorage = (() => {
         ws.repository = merged;
         state.workspaces[emailKey] = ws;
 
-        // Merge search history without duplicates
-        const localHistory = state.search_history || [];
-        const remoteHistory = ws.search_history || [];
-        const historySet = new Set(localHistory);
-        remoteHistory.forEach(h => historySet.add(h));
-        state.search_history = [...historySet].slice(0, 50);
+        // Merge search history without duplicates (by query text)
+        state.search_history = mergeSearchHistories(state.search_history || [], ws.search_history || []);
         ws.search_history = state.search_history;
 
         saveState(state);
@@ -246,14 +242,24 @@ const NebulaStorage = (() => {
         state.repository = [...localRepo, ...newFromWs];
         ws.repository = state.repository;
 
-        const localHistory = state.search_history || [];
-        const wsHistory = ws.search_history || [];
-        const hSet = new Set(localHistory);
-        wsHistory.forEach(h => hSet.add(h));
-        state.search_history = [...hSet].slice(0, 50);
+        state.search_history = mergeSearchHistories(state.search_history || [], ws.search_history || []);
         ws.search_history = state.search_history;
 
         rebuildInterests(state, email);
+    }
+
+    function mergeSearchHistories(localHistory, remoteHistory) {
+        const seen = new Set();
+        const merged = [];
+        [...localHistory, ...remoteHistory].forEach(h => {
+            const entry = typeof h === 'string' ? { query: h } : h;
+            const key = (entry?.query || '').toLowerCase().trim();
+            if (!key || seen.has(key)) return;
+            seen.add(key);
+            merged.push(entry);
+        });
+        merged.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+        return merged.slice(0, 50);
     }
 
     function rebuildInterests(state, email) {
@@ -333,11 +339,11 @@ const NebulaStorage = (() => {
     async function saveStateAsync(state) {
         saveState(state);
 
-        if (state.current_user && window.NebulaSupabase) {
+        if (state.current_user && window.NebulaSupabaseConfig?.url) {
             const email = (state.current_user || '').toLowerCase().trim();
             state.current_user = email;
             const user = state.users[email];
-            if (!user) return;
+            if (!user) return false;
 
             try {
                 const interestObj = { ...(state.user_interest[email] || {}) };
@@ -360,16 +366,49 @@ const NebulaStorage = (() => {
                 await upsertProfileToSupabase(profileObj);
 
                 const ws = state.workspaces[email] || blankWorkspace();
-
-                await window.NebulaSupabase.from('workspaces').upsert({
-                    email: email,
-                    repository: ws.repository || [],
-                    search_history: ws.search_history || []
-                });
+                return await upsertWorkspaceToSupabase(email, ws);
             } catch (err) {
                 console.error("[Supabase] Sync failed:", err);
+                return false;
             }
         }
+        return false;
+    }
+
+    async function upsertWorkspaceToSupabase(email, ws) {
+        const cfg = window.NebulaSupabaseConfig;
+        if (!cfg?.url || !cfg?.key || !email) return false;
+
+        const body = JSON.stringify({
+            email: email,
+            repository: ws.repository || [],
+            search_history: ws.search_history || []
+        });
+
+        for (let attempt = 1; attempt <= 3; attempt++) {
+            try {
+                const controller = new AbortController();
+                const timeout = setTimeout(() => controller.abort(), 60000);
+                const res = await fetch(`${cfg.url}/rest/v1/workspaces`, {
+                    method: 'POST',
+                    headers: {
+                        'apikey': cfg.key,
+                        'Authorization': `Bearer ${cfg.key}`,
+                        'Content-Type': 'application/json',
+                        'Prefer': 'resolution=merge-duplicates,return=minimal'
+                    },
+                    body,
+                    signal: controller.signal
+                });
+                clearTimeout(timeout);
+                if (res.ok) return true;
+                console.warn(`[Storage] Workspace upsert HTTP ${res.status} (tentativa ${attempt})`);
+            } catch (e) {
+                console.warn(`[Storage] Workspace upsert falhou (tentativa ${attempt}):`, e);
+            }
+            await new Promise(r => setTimeout(r, 1200 * attempt));
+        }
+        return false;
     }
 
     function findUserKey(state, email) {
@@ -1114,6 +1153,7 @@ const NebulaStorage = (() => {
             state.workspaces[userEmail].search_history = [...state.search_history];
         }
         saveState(state);
+        setTimeout(() => { try { saveStateAsync(state); } catch (e) {} }, 50);
     }
 
     return {
@@ -1163,5 +1203,6 @@ const NebulaStorage = (() => {
         fetchProfilesFromAPI,
         saveProfileViaAPI,
         recordSearchHistory,
+        upsertWorkspaceToSupabase,
     };
 })();
