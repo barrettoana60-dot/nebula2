@@ -1292,20 +1292,23 @@ const NebulaStorage = (() => {
         const peer = (peerEmail || '').toLowerCase().trim();
         if (sender !== me) return null;
 
-        // Check if peer has read this room via presence (real-time)
-        const peerPresence = (presenceList || []).find(p => p.email === peer);
+        // 1. Visto (dois pontinhos verdes)
+        const peerPresence = (presenceList || []).find(p => (p.email || '').toLowerCase().trim() === peer);
         const readAt = peerPresence?.read_rooms?.[roomId] || 0;
-        const msgTs = msg.timestamp || msg.created_at ? new Date(msg.created_at || msg.timestamp).getTime() : 0;
+        const msgTs = msg.timestamp || (msg.created_at ? new Date(msg.created_at).getTime() : 0);
         if (readAt && readAt >= msgTs) return 'read';
 
-        // Peer is currently online in this room = seen
         if (peerPresence && peerPresence.typing_room === roomId) return 'read';
 
         const readBy = msg.read_by || [];
         if (readBy.includes(peer)) return 'read';
 
-        // Message was saved to supabase = delivered
-        if (msg.delivered || msg.id) return 'delivered';
+        // 2. Entregue (um pontinho)
+        if (msg.delivered === true || (typeof msg.id === 'number' && msg.id > 0)) {
+            return 'delivered';
+        }
+
+        // 3. Enviado (dois pontinhos)
         return 'sent';
     }
 

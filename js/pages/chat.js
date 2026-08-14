@@ -676,6 +676,8 @@ const PageChat = (() => {
                 text: text.slice(0, 2000),
                 timestamp: sendTime,
                 created_at: new Date(sendTime).toISOString(),
+                delivered: false,
+                _pending: true
             };
 
             // Append to local store immediately (no await needed for display)
@@ -755,14 +757,25 @@ const PageChat = (() => {
                 // Non-AI: save to Supabase in background without blocking UI
                 NebulaStorage.saveMessageToSupabase(msgObj).then(ok => {
                     if (ok) {
-                        // Armazena no cache local do destinatario (cross-user, mesma maquina de testes)
-                        // e forca o sininho a re-checar via Supabase no proximo poll
+                        msgObj.delivered = true;
+                        msgObj._pending = false;
+                        const curr = getStoredMessages();
+                        const idx = curr.findIndex(m => m.id === msgObj.id);
+                        if (idx >= 0) {
+                            curr[idx].delivered = true;
+                            curr[idx]._pending = false;
+                            saveStoredMessages(curr);
+                        }
+                        lastRenderedHash = '';
+                        loadMessages();
                         if (typeof NebulaApp !== 'undefined') NebulaApp.updateBell();
                     }
                 }).catch(e => {
                     console.warn('[Chat] Supabase send fallback to local:', e);
                 }).finally(() => {
                     _optimisticMsgs = _optimisticMsgs.filter(m => m.id !== msgObj.id);
+                    lastRenderedHash = '';
+                    loadMessages();
                 });
             }
         });
