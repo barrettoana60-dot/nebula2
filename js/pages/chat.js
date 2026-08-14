@@ -422,12 +422,22 @@ const PageChat = (() => {
 
         if (!msgs.length) {
             msgContainer.innerHTML = `<div style="padding:2rem; text-align:center; color:var(--text-white-60); font-size:0.9rem;">
-                ${room.kind === 'ai' ? 'Olá! Sou o Llama 3.3. Como posso ajudar na sua pesquisa hoje?' : 'Nenhuma mensagem ainda. Digite sua mensagem abaixo!'}
+                ${room.kind === 'ai'
+                    ? '<div style="font-size:2rem;margin-bottom:0.75rem;">🤖</div><b>Llama 3.3</b><br><span style="font-size:0.82rem;">Inteligência Artificial para Pesquisa Acadêmica<br>Pergunte sobre sua área de pesquisa, referências, metodologia...</span>'
+                    : 'Nenhuma mensagem ainda. Digite sua mensagem abaixo!'}
             </div>`;
             return;
         }
 
-        let html = `<div style="display:flex; flex-direction:column; gap:0.8rem;">`;
+        const peerKey = room.peer ? NebulaStorage.findUserKey(state, room.peer) : null;
+        const peerUser = peerKey ? state.users[peerKey] : {};
+        const peerPhoto = peerUser?.photo || null;
+
+        const myKey = NebulaStorage.findUserKey(state, emailClean);
+        const myUser = myKey ? state.users[myKey] : {};
+        const myPhoto = myUser?.photo || null;
+
+        let html = `<div style="display:flex; flex-direction:column; gap:0.6rem; padding:0.5rem 0;">`;
         msgs.forEach(msg => {
             const senderClean = (msg.sender_email || '').toLowerCase().trim();
             const isMe = senderClean === emailClean;
@@ -436,31 +446,48 @@ const PageChat = (() => {
                 ? new Date(msg.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
                 : msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
 
-            const userKey = NebulaStorage.findUserKey(state, msg.sender_email);
-            const senderUser = userKey ? state.users[userKey] : {};
-            const senderPhoto = senderUser.photo || null;
-            const senderInitial = isAi ? 'IA' : (senderUser.name || msg.sender_name || 'U').trim().charAt(0).toUpperCase();
-            const statusHtml = isMe && !isAi ? renderStatusDots(NebulaStorage.getMessageStatus(msg, emailClean, room.peer, _presenceList, room.id)) : '';
-            const photoClick = senderPhoto ? `onclick="PageChat.openPhotoViewer('${senderPhoto.replace(/'/g, "\\'")}','${(senderUser.name || msg.sender_name || 'Usuário').replace(/'/g, "\\'")}')"` : '';
-            const photoStyle = senderPhoto ? 'cursor:pointer;' : '';
+            const msgStatus = isMe && !isAi ? NebulaStorage.getMessageStatus(msg, emailClean, room.peer, _presenceList, room.id) : null;
+            let statusHtml = '';
+            if (msgStatus === 'read') {
+                statusHtml = `<span style="color:#3b82f6;font-weight:800;font-size:0.8rem;letter-spacing:-1px;" title="Visualizado">✓✓</span>`;
+            } else if (msgStatus === 'delivered') {
+                statusHtml = `<span style="color:var(--text-white-60);font-weight:800;font-size:0.8rem;letter-spacing:-1px;" title="Entregue">✓✓</span>`;
+            } else if (msgStatus === 'sent') {
+                statusHtml = `<span style="color:var(--text-white-60);font-weight:700;font-size:0.8rem;" title="Enviado">✓</span>`;
+            }
+
+            // Determine which photo to show for sender avatar
+            let avatarContent = '';
+            if (isAi) {
+                avatarContent = `<div style="width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,#3b82f6,#1d4ed8);display:flex;align-items:center;justify-content:center;font-size:0.78rem;font-weight:700;color:#fff;flex-shrink:0;box-shadow:0 2px 8px rgba(59,130,246,0.3);">IA</div>`;
+            } else if (!isMe && peerPhoto) {
+                avatarContent = `<div style="width:34px;height:34px;border-radius:50%;overflow:hidden;flex-shrink:0;box-shadow:0 2px 6px rgba(0,0,0,0.15);cursor:pointer;" onclick="PageChat.openPhotoViewer('${peerPhoto.replace(/'/g,"\\'")}','${(peerUser?.name || room.label || '').replace(/'/g,"\\'")}')"><img src="${peerPhoto}" style="width:100%;height:100%;object-fit:cover;"></div>`;
+            } else if (!isMe) {
+                const initial = (msg.sender_name || room.label || '?').trim().charAt(0).toUpperCase();
+                avatarContent = `<div style="width:34px;height:34px;border-radius:50%;background:var(--color-blue);display:flex;align-items:center;justify-content:center;font-size:0.85rem;font-weight:700;color:#fff;flex-shrink:0;">${initial}</div>`;
+            } else if (isMe && myPhoto) {
+                avatarContent = `<div style="width:34px;height:34px;border-radius:50%;overflow:hidden;flex-shrink:0;box-shadow:0 2px 6px rgba(0,0,0,0.15);cursor:pointer;" onclick="PageChat.openPhotoViewer('${myPhoto.replace(/'/g,"\\'")}','Você')"><img src="${myPhoto}" style="width:100%;height:100%;object-fit:cover;"></div>`;
+            } else if (isMe) {
+                const myInitial = (myUser?.name || emailClean || 'U').trim().charAt(0).toUpperCase();
+                avatarContent = `<div style="width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,#f97316,#ea580c);display:flex;align-items:center;justify-content:center;font-size:0.85rem;font-weight:700;color:#fff;flex-shrink:0;">${myInitial}</div>`;
+            }
+
+            const bubbleBg = isMe
+                ? 'rgba(59,130,246,0.12); border:1px solid rgba(59,130,246,0.25);'
+                : isAi ? 'rgba(59,130,246,0.07); border:1px solid rgba(59,130,246,0.15);'
+                : 'rgba(218,200,179,0.9); border:1px solid rgba(0,0,0,0.06);';
 
             html += `
-                <div style="display:flex; gap:0.6rem; align-items:flex-start; justify-content:${isMe ? 'flex-end' : 'flex-start'};">
-                    ${!isMe ? `
-                    <div style="width:32px;height:32px;border-radius:50%;background:${isAi ? '#3b82f6' : 'var(--color-blue)'};display:flex;align-items:center;justify-content:center;font-size:0.8rem;font-weight:700;color:#fff;flex-shrink:0;overflow:hidden;${photoStyle}" ${photoClick}>
-                        ${senderPhoto ? `<img src="${senderPhoto}" style="width:100%;height:100%;object-fit:cover;">` : senderInitial}
-                    </div>` : ''}
-                    <div class="chat-bubble ${isMe ? 'me' : ''}" style="margin:0;max-width:75%;">
-                        <div style="display:flex;justify-content:space-between;gap:1rem;font-size:0.75rem;color:var(--text-white-60);margin-bottom:0.25rem;align-items:center;">
-                            <span><b>${isAi ? 'Llama 3.3 (IA)' : (msg.sender_name || senderUser.name || 'Usuário')}</b></span>
-                            <span style="display:flex;align-items:center;gap:0.35rem;">${statusHtml}${time}</span>
+                <div style="display:flex; gap:0.5rem; align-items:flex-end; justify-content:${isMe ? 'flex-end' : 'flex-start'};">
+                    ${!isMe ? avatarContent : ''}
+                    <div style="max-width:72%; background:${bubbleBg} border-radius:${isMe ? '18px 18px 4px 18px' : '18px 18px 18px 4px'}; padding:0.6rem 0.9rem; box-shadow:0 1px 4px rgba(0,0,0,0.06);">
+                        <div style="display:flex;justify-content:space-between;gap:0.6rem;font-size:0.72rem;color:var(--text-white-60);margin-bottom:0.2rem;align-items:center;">
+                            <span style="font-weight:700;">${isAi ? 'Llama 3.3' : (msg.sender_name || (isMe ? (myUser?.name || 'Você') : (peerUser?.name || room.label)) || 'Usuário')}</span>
+                            <span style="display:flex;align-items:center;gap:0.25rem;white-space:nowrap;">${statusHtml}${time}</span>
                         </div>
-                        <div style="word-break:break-word;font-size:0.92rem;color:var(--text-white-80);line-height:1.4;">${(msg.text || '').replace(/\n/g, '<br>')}</div>
+                        <div style="word-break:break-word;font-size:0.9rem;color:var(--text-white-80);line-height:1.5;">${(msg.text || '').replace(/\n/g,'<br>')}</div>
                     </div>
-                    ${isMe ? `
-                    <div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#f97316,#ea580c);display:flex;align-items:center;justify-content:center;font-size:0.8rem;font-weight:700;color:#fff;flex-shrink:0;overflow:hidden;${photoStyle}" ${photoClick}>
-                        ${senderPhoto ? `<img src="${senderPhoto}" style="width:100%;height:100%;object-fit:cover;">` : senderInitial}
-                    </div>` : ''}
+                    ${isMe ? avatarContent : ''}
                 </div>`;
         });
         html += '</div>';
@@ -565,38 +592,46 @@ const PageChat = (() => {
             const room = rooms[activeRoomIdx];
             const sender = state.users[email] || state.users[emailClean] || {};
 
-            _sendLock = true;
-            btn.disabled = true;
-            btn.textContent = 'Enviando...';
+            // Clear input IMMEDIATELY so user feels speed
+            chatDraft.value = '';
+            const sendTime = Date.now();
 
-            try {
             const msgObj = {
-                id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+                id: sendTime.toString(36) + Math.random().toString(36).slice(2, 6),
                 room_id: room.id,
                 room_label: room.label || '',
                 recipient_email: room.peer,
                 sender_email: emailClean,
                 sender_name: sender.name || email,
                 text: text.slice(0, 2000),
-                timestamp: Date.now(),
-                created_at: new Date().toISOString(),
+                timestamp: sendTime,
+                created_at: new Date(sendTime).toISOString(),
             };
 
-            await sendMessage(msgObj);
-            chatDraft.value = '';
+            // Append to local store immediately (no await needed for display)
+            const localStore = getStoredMessages();
+            saveStoredMessages(NebulaStorage.mergeMessagesUnique(localStore, [msgObj]));
+            _optimisticMsgs = NebulaStorage.mergeMessagesUnique(_optimisticMsgs, [msgObj]);
+
+            // Re-render immediately
             lastRenderedHash = '';
-            await loadMessages();
+            loadMessages();
 
             if (room.kind === 'ai') {
+                _sendLock = true;
                 btn.disabled = true;
-                btn.textContent = 'Llama 3.3 digitando...';
+                btn.textContent = '...';
                 const statusEl = document.getElementById('chat-status');
-                if (statusEl) statusEl.innerHTML = `<span class="chat-typing-indicator"><span class="chat-typing-dot"></span><span class="chat-typing-dot"></span><span class="chat-typing-dot"></span> Llama 3.3 está digitando...</span>`;
+                if (statusEl) statusEl.innerHTML = `<span class="chat-typing-indicator"><span class="chat-typing-dot"></span><span class="chat-typing-dot"></span><span class="chat-typing-dot"></span>&nbsp;Llama 3.3 está digitando...</span>`;
+
                 try {
-                    const allMsgs = await getRoomMessages(room.id, email, 'ai');
-                    const sysPrompt = 'Você é o Llama 3.3, assistente de inteligência artificial do Nebula Research. Responda de forma direta, clara e inteligente em português.';
+                    const allMsgs = getStoredMessages().filter(m =>
+                        messageBelongsToRoom(m, room.id, emailClean, 'ai', true)
+                    ).sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+
+                    const sysPrompt = 'Você é o Llama 3.3, assistente de inteligência artificial do Nebula Research. Responda de forma direta, clara e inteligente em português. Seja útil e conciso.';
                     const messages = [{ role: 'system', content: sysPrompt }];
-                    allMsgs.slice(-10).forEach(m => {
+                    allMsgs.slice(-12).forEach(m => {
                         messages.push({
                             role: (m.sender_email === 'ai@nebula' || m.sender_email === 'ai') ? 'assistant' : 'user',
                             content: m.text
@@ -604,8 +639,8 @@ const PageChat = (() => {
                     });
 
                     let aiResponse = await NebulaAI.chatWithAI(messages);
-                    if (!aiResponse || aiResponse.startsWith('Ocorreu um erro') || aiResponse.startsWith('Erro de conexão')) {
-                        aiResponse = 'Desculpe, tive um problema momentâneo. Pode repetir sua pergunta?';
+                    if (!aiResponse || aiResponse.trim().length < 2) {
+                        aiResponse = 'Olá! Pode elaborar mais sua pergunta? Estou pronto para ajudar com sua pesquisa.';
                     }
 
                     const aiMsg = {
@@ -619,24 +654,26 @@ const PageChat = (() => {
                         timestamp: Date.now(),
                         created_at: new Date().toISOString(),
                     };
-                    await sendMessage(aiMsg);
+                    const ls2 = getStoredMessages();
+                    saveStoredMessages(NebulaStorage.mergeMessagesUnique(ls2, [aiMsg]));
                 } catch (e) {
                     console.error('[Chat] AI Llama error:', e);
-                }
-                const aiStatusEl = document.getElementById('chat-status');
-                if (aiStatusEl) aiStatusEl.textContent = '';
-                _sendLock = false;
-                btn.disabled = false;
-                btn.textContent = 'Enviar mensagem';
-                lastRenderedHash = '';
-                await loadMessages();
-            }
-            } finally {
-                if (room.kind !== 'ai') {
+                } finally {
+                    const aiStatusEl = document.getElementById('chat-status');
+                    if (aiStatusEl) aiStatusEl.textContent = '';
                     _sendLock = false;
                     btn.disabled = false;
                     btn.textContent = 'Enviar mensagem';
+                    lastRenderedHash = '';
+                    loadMessages();
                 }
+            } else {
+                // Non-AI: save to Supabase in background without blocking UI
+                NebulaStorage.saveMessageToSupabase(msgObj).catch(e => {
+                    console.warn('[Chat] Supabase send fallback to local:', e);
+                }).finally(() => {
+                    _optimisticMsgs = _optimisticMsgs.filter(m => m.id !== msgObj.id);
+                });
             }
         });
 

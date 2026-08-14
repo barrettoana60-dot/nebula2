@@ -436,7 +436,7 @@ const PageRepository = (() => {
                     <div class="file-card">
                         <div>
                             <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:0.5rem;">
-                                <span style="font-size:0.72rem; text-transform:uppercase; color:var(--color-blue); font-weight:700; letter-spacing:0.05em">${doc.kind || 'DOCUMENTO'}</span>
+                                <span style="font-size:0.72rem; text-transform:uppercase; color:var(--color-blue); font-weight:700; letter-spacing:0.05em">${doc.document_type || doc.kind || 'DOCUMENTO'}</span>
                                 <span style="font-size:0.7rem; ${visStyle}">${visIcon}</span>
                             </div>
                             <div class="file-card-title" title="${doc.name}">${doc.name}</div>
