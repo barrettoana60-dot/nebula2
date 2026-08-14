@@ -300,7 +300,7 @@ const PageChat = (() => {
                 const photo = getPeerPhoto(r.peer);
                 const initial = (r.label || '?').trim().charAt(0).toUpperCase();
                 const online = r.kind === 'direct' && NebulaStorage.isUserOnline(_presenceList, r.peer, state);
-                avatarHtml = `<div class="chat-list-item-avatar" style="position:relative;">${photo ? `<img src="${photo}" alt="">` : initial}${online ? '<span class="online-dot" title="Online"></span>' : ''}</div>`;
+                avatarHtml = `<div class="chat-list-item-avatar" style="position:relative;">${photo ? `<img src="${photo}" alt="">` : initial}<span class="${online ? 'online-dot' : 'offline-dot'}" title="${online ? 'Online' : 'Offline'}"></span></div>`;
             }
 
             return `
@@ -328,12 +328,12 @@ const PageChat = (() => {
             const photo = getPeerPhoto(room.peer);
             const initial = (room.label || '?').trim().charAt(0).toUpperCase();
             const online = NebulaStorage.isUserOnline(_presenceList, room.peer, state);
-            avatarHtml = `<div class="chat-header-avatar user" style="cursor:pointer;position:relative;" onclick="PageProfile.render(document.getElementById('pageContainer'), NebulaApp.getState(), '${room.peer}')">${photo ? `<img src="${photo}" alt="" onclick="event.stopPropagation();PageChat.openPhotoViewer('${photo.replace(/'/g, "\\'")}','${(room.label || '').replace(/'/g, "\\'")}')">` : initial}${online ? '<span class="online-dot" title="Online"></span>' : ''}</div>`;
+            avatarHtml = `<div class="chat-header-avatar user" style="cursor:pointer;position:relative;" onclick="PageProfile.render(document.getElementById('pageContainer'), NebulaApp.getState(), '${room.peer}')">${photo ? `<img src="${photo}" alt="" onclick="event.stopPropagation();PageChat.openPhotoViewer('${photo.replace(/'/g, "\\'")}','${(room.label || '').replace(/'/g, "\\'")}')">` : initial}<span class="${online ? 'online-dot' : 'offline-dot'}" title="${online ? 'Online' : 'Offline'}"></span></div>`;
             const sim = room.similarity || 0;
             const viewed = NebulaStorage.hasViewedProfile(state, emailClean, room.peer);
             const topics = room.shared_topics?.length ? room.shared_topics.slice(0, 3).join(', ') : 'Pesquisa Científica';
             subtitleHtml =
-                (online ? `<span style="font-size:0.8rem;color:#10b981;font-weight:600;margin-right:8px;display:inline-flex;align-items:center;gap:4px;"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#10b981;"></span> Online</span>` : `<span style="font-size:0.8rem;color:var(--text-white-40);margin-right:8px;">○ Offline</span>`) +
+                (online ? `<span style="font-size:0.8rem;color:#10b981;font-weight:600;margin-right:8px;display:inline-flex;align-items:center;gap:4px;"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#10b981;"></span> Online</span>` : `<span style="font-size:0.8rem;color:var(--text-white-40);font-weight:500;margin-right:8px;display:inline-flex;align-items:center;gap:4px;"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:rgba(140,130,120,0.6);"></span> Offline</span>`) +
                 (viewed ? `<span style="font-size:0.8rem;color:#10b981;font-weight:600;margin-right:8px;">✓ Visualizado</span>` : '') +
                 (sim > 0 ? `<span style="font-size:0.8rem;color:var(--color-blue);font-weight:600;margin-right:8px;">${sim}% afinidade</span>` : '') +
                 `<span style="font-size:0.8rem;color:var(--text-white-60);">• ${topics}</span>` +
@@ -387,7 +387,7 @@ const PageChat = (() => {
         }
 
         loadMessages();
-        _pollTimer = setInterval(loadMessages, 2000);
+        _pollTimer = setInterval(loadMessages, 1000);
     }
 
     async function selectPeer(peerEmail) {
@@ -415,9 +415,9 @@ const PageChat = (() => {
             NebulaStorage.markRoomMessagesRead(state, emailClean, room.peer, room.id);
             NebulaStorage.pulsePresence(emailClean, null, room.id);
 
-            // Sincronia de inbox a cada 10s para garantir mensagens recebidas
+            // Sincronia de inbox a cada 6s para garantir mensagens recebidas
             const now = Date.now();
-            if (now - _lastInboxSync > 10000) {
+            if (now - _lastInboxSync > 6000) {
                 _lastInboxSync = now;
                 NebulaStorage.syncInboxFromSupabase(state, emailClean).catch(() => {});
             }
@@ -427,8 +427,12 @@ const PageChat = (() => {
         const msgContainer = document.getElementById('chat-messages-container');
         if (!msgContainer) return;
 
+        const remoteTyping = room.kind === 'direct' ? NebulaStorage.getRemoteTypingPeers(_presenceList, room.id, emailClean) : [];
+        const localTyping = room.kind === 'direct' ? NebulaStorage.getTypingPeers(room.id, emailClean) : [];
+        const typingPeers = remoteTyping.length ? remoteTyping : localTyping;
+
         const lastMsg = msgs[msgs.length - 1];
-        const currentHash = msgs.length + '::' + (lastMsg?.id || '') + '::' + (lastMsg?.timestamp || '') + '::' + (lastMsg?.text || '').slice(-20) + '::' + _presenceList.length;
+        const currentHash = msgs.length + '::' + (lastMsg?.id || '') + '::' + (lastMsg?.timestamp || '') + '::' + (lastMsg?.text || '').slice(-20) + '::' + _presenceList.length + '::' + _isAiTyping + '::' + typingPeers.join(',');
 
         renderTypingIndicator(room);
         renderHeader(room);

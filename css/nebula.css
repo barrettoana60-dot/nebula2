@@ -1995,6 +1995,17 @@ input:disabled + .slider { opacity: 0.5; cursor: not-allowed; }
     animation: online-pulse-anim 2s infinite ease-in-out;
 }
 
+.offline-dot {
+    position: absolute;
+    right: 0px;
+    bottom: 0px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: rgba(140, 130, 120, 0.65);
+    border: 2px solid #DAC8B3;
+}
+
 @keyframes online-pulse-anim {
     0% {
         box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);

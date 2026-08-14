@@ -373,6 +373,12 @@ const NebulaApp = (() => {
     function startBellPoll() {
         updateBell();
         setInterval(updateBell, 3000);
+        window.addEventListener('storage', (e) => {
+            if (!e.key) return;
+            if (e.key.startsWith('nebula_chat_store_') || e.key === 'nebula_msg_broadcast' || e.key === 'nebula_presence_ping') {
+                updateBell();
+            }
+        });
     }
 
     // ── Page Rendering ──

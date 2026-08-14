@@ -26,6 +26,7 @@ const PageProfile = (() => {
         const publicDocs = (userWs.repository || []).filter(d => d.visibility === 'public' || d.topic);
         const isOnline = NebulaStorage.isUserOnline([], targetEmail, state);
         const coverStyle = user.cover ? `background-size:cover;background-position:center;min-height:220px;image-rendering:-webkit-optimize-contrast;` : 'min-height:220px;';
+        const initial = (user.name || targetEmail || '?').trim().charAt(0).toUpperCase();
 
         container.innerHTML = `
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem;">
@@ -41,12 +42,12 @@ const PageProfile = (() => {
                             <div style="width:100%;height:100%;border-radius:18px;overflow:hidden;display:flex;align-items:center;justify-content:center;">
                                 ${user.photo ? `<img src="${user.photo}" alt="" style="width:100%;height:100%;object-fit:cover;">` : initial}
                             </div>
-                            ${isOnline ? '<span class="online-dot" style="width:14px;height:14px;bottom:4px;right:4px;" title="Online"></span>' : ''}
+                            <span class="${isOnline ? 'online-dot' : 'offline-dot'}" style="width:14px;height:14px;bottom:4px;right:4px;" title="${isOnline ? 'Online' : 'Offline'}"></span>
                         </div>
                         <div style="flex:1; padding-bottom:0.25rem;">
                             <div style="display:flex;align-items:center;gap:0.6rem;flex-wrap:wrap;">
                                 <h2 style="font-size:1.6rem; font-weight:700; margin-bottom:0.25rem; color:var(--text-white);">${user.name || 'Pesquisador'}</h2>
-                                ${isOnline ? '<span class="tag" style="background:rgba(16,185,129,0.15);border-color:#10b981;color:#10b981;font-weight:700;font-size:0.75rem;display:inline-flex;align-items:center;gap:4px;"><span style="width:6px;height:6px;border-radius:50%;background:#10b981;"></span> Online</span>' : '<span class="tag" style="font-size:0.72rem;color:var(--text-white-40);">Offline</span>'}
+                                ${isOnline ? '<span class="tag" style="background:rgba(16,185,129,0.15);border-color:#10b981;color:#10b981;font-weight:700;font-size:0.75rem;display:inline-flex;align-items:center;gap:4px;"><span style="width:6px;height:6px;border-radius:50%;background:#10b981;"></span> Online</span>' : '<span class="tag" style="background:rgba(140,130,120,0.15);border-color:rgba(140,130,120,0.3);font-size:0.75rem;color:var(--text-white-40);display:inline-flex;align-items:center;gap:4px;"><span style="width:6px;height:6px;border-radius:50%;background:rgba(140,130,120,0.6);"></span> Offline</span>'}
                             </div>
                             <p style="color:var(--text-white-60); font-size:0.9rem;">@${targetEmail.split('@')[0]}</p>
                             ${user.research ? `<div style="margin-top:0.75rem; font-size:0.95rem; color:var(--text-white-80); line-height:1.5;"><b>Linha de Pesquisa:</b> ${user.research}</div>` : ''}

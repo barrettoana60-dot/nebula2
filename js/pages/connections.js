@@ -177,7 +177,7 @@ const PageConnections = (() => {
                             <div style="width:100%; height:100%; border-radius:50%; overflow:hidden; display:flex; align-items:center; justify-content:center;">
                                 ${conn.photo ? `<img src="${conn.photo}" alt="" style="width:100%;height:100%;object-fit:cover;">` : initial}
                             </div>
-                            ${isOnline ? '<span class="online-dot" style="width:9px; height:9px; bottom:0; right:0;" title="Online"></span>' : ''}
+                            <span class="${isOnline ? 'online-dot' : 'offline-dot'}" style="width:9px; height:9px; bottom:0; right:0;" title="${isOnline ? 'Online' : 'Offline'}"></span>
                         </div>
                         <div style="flex:1; min-width:0;">
                             <div style="font-weight:700; font-size:0.88rem; color:var(--text-white); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${conn.name || conn.email}</div>

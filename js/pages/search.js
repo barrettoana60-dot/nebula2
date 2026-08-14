@@ -81,7 +81,7 @@ const PageSearch = (() => {
                     <div style="width:100%;height:100%;border-radius:50%;overflow:hidden;display:flex;align-items:center;justify-content:center;">
                         ${userObj.photo ? `<img src="${userObj.photo}" alt="" style="width:100%;height:100%;object-fit:cover;">` : initial}
                     </div>
-                    ${isOnline ? '<span class="online-dot" style="width:11px; height:11px; bottom:2px; right:2px;" title="Online"></span>' : ''}
+                    <span class="${isOnline ? 'online-dot' : 'offline-dot'}" style="width:11px; height:11px; bottom:2px; right:2px;" title="${isOnline ? 'Online' : 'Offline'}"></span>
                 </div>
                 <div style="flex:1; min-width:200px;">
                     <div style="font-weight:700; font-size:1.05rem; color:var(--text-white);">${name} ${isSelf ? '<span class="tag" style="font-size:0.65rem;">Você</span>' : ''}</div>
