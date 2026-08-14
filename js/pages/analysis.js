@@ -245,10 +245,17 @@ const PageAnalysis = (() => {
                     <div id="chart-radar"></div>
                 </div>
                 <div class="glass">
-                    <div class="section-title">Assuntos mais discutidos</div>
-                    <p class="small-muted mb-1">A frequência de temas no seu acervo.</p>
-                    <div id="chart-topics"></div>
+                    <div class="section-title">Tipos de Acervo &amp; Documentos</div>
+                    <p class="small-muted mb-1">Distribuição e legendas por categoria acadêmica.</p>
+                    <div id="chart-doc-types"></div>
+                    <div id="doc-types-legend" style="margin-top:0.75rem; display:flex; flex-wrap:wrap; gap:0.4rem;"></div>
                 </div>
+            </div>
+
+            <div class="glass mb-1">
+                <div class="section-title">Assuntos mais discutidos</div>
+                <p class="small-muted mb-1">A frequência de temas no seu acervo.</p>
+                <div id="chart-topics"></div>
             </div>
             
             <div class="glass">
@@ -420,6 +427,50 @@ Com base nesses dados, recomende 5 obras REAIS e ESPECÍFICAS que estão FALTAND
             polar: { radialaxis: { visible: true, range: [0, 100] }, bgcolor: 'transparent' },
             height: 350, margin: {l:40, r:40, t:20, b:20}, paper_bgcolor:'transparent'
         }, plotConfig);
+
+        // Doc Types Breakdown & Legends
+        const docTypesCount = {};
+        docs.forEach(d => {
+            const t = d.document_type || d.kind || 'Artigo Periódico';
+            docTypesCount[t] = (docTypesCount[t] || 0) + 1;
+        });
+
+        const dtLabels = Object.keys(docTypesCount);
+        const dtValues = Object.values(docTypesCount);
+        const dtColors = ['#3b82f6', '#f97316', '#10b981', '#eab308', '#8b5cf6', '#ec4899', '#06b6d4', '#64748b'];
+
+        if (dtLabels.length) {
+            Plotly.newPlot('chart-doc-types', [{
+                type: 'pie',
+                hole: 0.45,
+                labels: dtLabels,
+                values: dtValues,
+                marker: { colors: dtColors },
+                textinfo: 'percent+label',
+                hoverinfo: 'label+value+percent'
+            }], {
+                height: 320,
+                margin: { l: 20, r: 20, t: 20, b: 20 },
+                paper_bgcolor: 'transparent',
+                plot_bgcolor: 'transparent',
+                showlegend: false,
+                font: { color: '#3a3d46' }
+            }, plotConfig);
+
+            const legendEl = document.getElementById('doc-types-legend');
+            if (legendEl) {
+                const total = docs.length;
+                legendEl.innerHTML = dtLabels.map((lbl, idx) => {
+                    const cnt = dtValues[idx];
+                    const pct = Math.round((cnt / total) * 100);
+                    const col = dtColors[idx % dtColors.length];
+                    return `<span class="tag" style="background:${col}18; border-color:${col}55; color:${col}; font-weight:700; font-size:0.75rem; display:inline-flex; align-items:center; gap:0.35rem;">
+                        <span style="width:8px; height:8px; border-radius:50%; background:${col};"></span>
+                        ${lbl}: <b>${cnt}</b> (${pct}%)
+                    </span>`;
+                }).join('');
+            }
+        }
 
         // Topics
         const tc = TextEngine.counter(topics).slice(0,6);
