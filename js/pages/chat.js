@@ -402,6 +402,7 @@ const PageChat = (() => {
         document.getElementById('chat-draft')?.focus();
     }
 
+    let _lastInboxSync = 0;
     async function loadMessages() {
         const room = rooms[activeRoomIdx];
         if (!room) return;
@@ -413,6 +414,13 @@ const PageChat = (() => {
         if (room.kind === 'direct') {
             NebulaStorage.markRoomMessagesRead(state, emailClean, room.peer, room.id);
             NebulaStorage.pulsePresence(emailClean, null, room.id);
+
+            // Sincronia de inbox a cada 10s para garantir mensagens recebidas
+            const now = Date.now();
+            if (now - _lastInboxSync > 10000) {
+                _lastInboxSync = now;
+                NebulaStorage.syncInboxFromSupabase(state, emailClean).catch(() => {});
+            }
         }
 
         const msgs = await getRoomMessages(room.id, email, room.peer);
@@ -739,7 +747,13 @@ const PageChat = (() => {
                 }
             } else {
                 // Non-AI: save to Supabase in background without blocking UI
-                NebulaStorage.saveMessageToSupabase(msgObj).catch(e => {
+                NebulaStorage.saveMessageToSupabase(msgObj).then(ok => {
+                    if (ok) {
+                        // Armazena no cache local do destinatario (cross-user, mesma maquina de testes)
+                        // e forca o sininho a re-checar via Supabase no proximo poll
+                        if (typeof NebulaApp !== 'undefined') NebulaApp.updateBell();
+                    }
+                }).catch(e => {
                     console.warn('[Chat] Supabase send fallback to local:', e);
                 }).finally(() => {
                     _optimisticMsgs = _optimisticMsgs.filter(m => m.id !== msgObj.id);

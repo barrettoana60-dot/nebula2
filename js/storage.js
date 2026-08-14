@@ -735,25 +735,55 @@ const NebulaStorage = (() => {
         }
     }
 
-    async function fetchUnreadMessagesFromSupabase(myEmail, sinceTs) {
+       async function fetchUnreadMessagesFromSupabase(myEmail, sinceTs) {
         if (!window.NebulaSupabase || !myEmail) return [];
         const clean = myEmail.toLowerCase().trim();
         const since = sinceTs || 0;
         try {
-            const { data } = await window.NebulaSupabase
+            // Busca mensagens onde eu sou o destinatário (recipient_email direto)
+            const { data: direct } = await window.NebulaSupabase
                 .from('community_messages')
-                .select('id, room_id, sender_email, sender_name, text, timestamp')
+                .select('id, room_id, sender_email, sender_name, recipient_email, text, timestamp')
+                .eq('recipient_email', clean)
                 .neq('sender_email', clean)
                 .gt('timestamp', since)
                 .order('timestamp', { ascending: false })
                 .limit(50);
 
-            return (data || []).filter(m => {
+            // Também busca pelo room_id (fallback para mensagens sem recipient_email populado)
+            const { data: byRoom } = await window.NebulaSupabase
+                .from('community_messages')
+                .select('id, room_id, sender_email, sender_name, recipient_email, text, timestamp')
+                .neq('sender_email', clean)
+                .gt('timestamp', since)
+                .order('timestamp', { ascending: false })
+                .limit(100);
+
+            const fromRoom = (byRoom || []).filter(m => {
                 const sender = (m.sender_email || '').toLowerCase().trim();
+                const recip = (m.recipient_email || '').toLowerCase().trim();
+                // Se já tem recipient_email populado, já foi pego na query direta
+                if (recip && recip !== clean) return false;
                 return sender && sender !== 'ai@nebula' && sender !== 'ai'
                     && m.room_id && buildDirectRoomId(clean, sender) === m.room_id;
-            }).map(m => normalizeChatMessage(m, clean, m.sender_email));
+            });
+
+            const all = [...(direct || []), ...fromRoom];
+            const unique = [];
+            const seen = new Set();
+            for (const m of all) {
+                const key = m.id || (m.sender_email + '::' + m.timestamp + '::' + (m.text || '').slice(0, 20));
+                if (!seen.has(key)) { seen.add(key); unique.push(m); }
+            }
+
+            return unique
+                .filter(m => {
+                    const sender = (m.sender_email || '').toLowerCase().trim();
+                    return sender && sender !== 'ai@nebula' && sender !== 'ai';
+                })
+                .map(m => normalizeChatMessage(m, clean, m.sender_email));
         } catch (e) {
+            console.warn('[Storage] fetchUnreadMessagesFromSupabase failed:', e);
             return [];
         }
     }
@@ -964,13 +994,48 @@ const NebulaStorage = (() => {
         if (!email || !window.NebulaSupabase) return [];
         const clean = email.toLowerCase().trim();
         try {
-            const { data: myWs } = await window.NebulaSupabase
-                .from('workspaces')
-                .select('inbox')
-                .eq('email', clean)
-                .maybeSingle();
+            // Busca mensagens recebidas dos ultimos 7 dias diretamente do community_messages
+            const sevenDaysAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
+            const { data: received } = await window.NebulaSupabase
+                .from('community_messages')
+                .select('*')
+                .eq('recipient_email', clean)
+                .gt('timestamp', sevenDaysAgo)
+                .order('timestamp', { ascending: false })
+                .limit(200);
 
-            const all = mergeMessagesUnique(myWs?.inbox || [], state.community_messages || []);
+            // Busca tambem pelo room_id (fallback para mensagens sem recipient_email)
+            const { data: byRoom } = await window.NebulaSupabase
+                .from('community_messages')
+                .select('*')
+                .neq('sender_email', clean)
+                .gt('timestamp', sevenDaysAgo)
+                .order('timestamp', { ascending: false })
+                .limit(300);
+
+            const allRemote = [...(received || [])];
+            (byRoom || []).forEach(m => {
+                const sender = (m.sender_email || '').toLowerCase().trim();
+                const recip = (m.recipient_email || '').toLowerCase().trim();
+                if (!recip && m.room_id && buildDirectRoomId(clean, sender) === m.room_id) {
+                    allRemote.push({ ...m, recipient_email: clean });
+                }
+            });
+
+            if (allRemote.length > 0) {
+                // Normaliza e mescla no localStorage do usuario
+                const normalized = allRemote
+                    .map(m => normalizeChatMessage(m, clean, m.sender_email))
+                    .filter(Boolean);
+                const storeKey = 'nebula_chat_store_v3_' + clean;
+                try {
+                    const existing = JSON.parse(localStorage.getItem(storeKey) || '[]');
+                    const merged = mergeMessagesUnique(existing, normalized);
+                    localStorage.setItem(storeKey, JSON.stringify(merged.slice(-500)));
+                } catch (e) {}
+            }
+
+            const all = mergeMessagesUnique(state.community_messages || [], allRemote.map(m => normalizeChatMessage(m, clean, m.sender_email)).filter(Boolean));
             state.community_messages = all.slice(-500);
             saveState(state);
             return state.community_messages.filter(m =>
@@ -1211,6 +1276,7 @@ const NebulaStorage = (() => {
         messagesAreDuplicate,
         normalizeChatMessage,
         mergeMessagesUnique,
+        buildDirectRoomId,
         fetchOnlinePresence,
         pulsePresence,
         isUserOnline,

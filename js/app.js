@@ -257,20 +257,26 @@ const NebulaApp = (() => {
             const lastSeen = parseInt(localStorage.getItem('nebula_bell_seen_' + emailClean) || '0');
             let unread = [];
 
-            // 1. Lê do cache local v3 (compatível com chat atual)
+            // 1. Cache local v3 — aceita recipient_email direto OU room_id que bate (fallback)
             try {
                 const localStore = JSON.parse(localStorage.getItem('nebula_chat_store_v3_' + emailClean) || '[]');
-                const localUnread = localStore.filter(m =>
-                    (m.recipient_email || '').toLowerCase().trim() === emailClean &&
-                    (m.sender_email || '').toLowerCase().trim() !== emailClean &&
-                    m.sender_email !== 'ai@nebula' &&
-                    m.sender_email !== 'ai' &&
-                    (m.timestamp || 0) > lastSeen
-                );
+                const localUnread = localStore.filter(m => {
+                    const sender = (m.sender_email || '').toLowerCase().trim();
+                    const recipient = (m.recipient_email || '').toLowerCase().trim();
+                    if (!sender || sender === emailClean || sender === 'ai@nebula' || sender === 'ai') return false;
+                    if ((m.timestamp || 0) <= lastSeen) return false;
+                    // Se recipient_email está preenchido, usa ele
+                    if (recipient) return recipient === emailClean;
+                    // Fallback: verifica pelo room_id
+                    if (m.room_id) {
+                        return NebulaStorage.buildDirectRoomId(emailClean, sender) === m.room_id;
+                    }
+                    return false;
+                });
                 unread.push(...localUnread);
             } catch (e) {}
 
-            // 2. Mensagens não lidas no Supabase (fonte única)
+            // 2. Mensagens não lidas no Supabase
             try {
                 const sbUnread = await NebulaStorage.fetchUnreadMessagesFromSupabase(emailClean, lastSeen);
                 unread.push(...sbUnread);
@@ -366,7 +372,7 @@ const NebulaApp = (() => {
 
     function startBellPoll() {
         updateBell();
-        setInterval(updateBell, 5000);
+        setInterval(updateBell, 3000);
     }
 
     // ── Page Rendering ──
