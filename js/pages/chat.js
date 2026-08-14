@@ -222,12 +222,12 @@ const PageChat = (() => {
 
     function renderStatusDots(status) {
         if (status === 'read') {
-            return `<span class="msg-status msg-status-read" title="Visualizado" style="color:#3b82f6; font-weight:bold; letter-spacing:-2px; display:inline-flex; align-items:center;">✓✓</span>`;
+            return `<span class="msg-status msg-status-read" title="Visualizado"><span class="msg-dot read"></span><span class="msg-dot read"></span></span>`;
         }
         if (status === 'delivered') {
-            return `<span class="msg-status msg-status-delivered" title="Entregue" style="color:var(--text-white-60); font-weight:bold; letter-spacing:-2px; display:inline-flex; align-items:center;">✓✓</span>`;
+            return `<span class="msg-status msg-status-delivered" title="Entregue"><span class="msg-dot delivered"></span><span class="msg-dot delivered"></span></span>`;
         }
-        return `<span class="msg-status msg-status-sent" title="Enviado" style="color:var(--text-white-60); font-weight:bold; display:inline-flex; align-items:center;">✓</span>`;
+        return `<span class="msg-status msg-status-sent" title="Enviado"><span class="msg-dot"></span></span>`;
     }
 
     function getStatusLabel(room) {
@@ -511,7 +511,7 @@ const PageChat = (() => {
                 : 'rgba(218,200,179,0.9); border:1px solid rgba(0,0,0,0.06);';
 
             html += `
-                <div style="display:flex; gap:0.5rem; align-items:flex-end; justify-content:${isMe ? 'flex-end' : 'flex-start'};">
+                <div class="chat-msg-row" style="display:flex; gap:0.5rem; align-items:flex-end; justify-content:${isMe ? 'flex-end' : 'flex-start'};">
                     ${!isMe ? avatarContent : ''}
                     <div style="max-width:72%; background:${bubbleBg} border-radius:${isMe ? '18px 18px 4px 18px' : '18px 18px 18px 4px'}; padding:0.6rem 0.9rem; box-shadow:0 1px 4px rgba(0,0,0,0.06);">
                         <div style="display:flex;justify-content:space-between;gap:0.6rem;font-size:0.72rem;color:var(--text-white-60);margin-bottom:0.2rem;align-items:center;">
@@ -639,9 +639,10 @@ const PageChat = (() => {
         }
 
         loadMessages();
-        _pollTimer = setInterval(loadMessages, 2000);
+        _pollTimer = setInterval(loadMessages, 1000);
+        NebulaStorage.initRealtimePresence(emailClean);
         NebulaStorage.pulsePresence(emailClean, null);
-        _presenceTimer = setInterval(() => NebulaStorage.pulsePresence(emailClean, null), 30000);
+        _presenceTimer = setInterval(() => NebulaStorage.pulsePresence(emailClean, null), 15000);
 
         const btn = document.getElementById('chat-send-btn');
         const chatDraft = document.getElementById('chat-draft');

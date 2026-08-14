@@ -1084,12 +1084,90 @@ const NebulaStorage = (() => {
         pulsePresence(email, roomId).catch(() => {});
     }
 
+    let _realtimePresenceChannel = null;
+
+    function initRealtimePresence(emailClean) {
+        if (!emailClean) return;
+        const clean = emailClean.toLowerCase().trim();
+        if (!window.NebulaSupabase) return;
+        try {
+            if (_realtimePresenceChannel) {
+                try { window.NebulaSupabase.removeChannel(_realtimePresenceChannel); } catch (e) {}
+            }
+            _realtimePresenceChannel = window.NebulaSupabase.channel('nebula_presence_room_v4', {
+                config: { presence: { key: clean } }
+            });
+
+            _realtimePresenceChannel
+                .on('presence', { event: 'sync' }, () => {
+                    const presenceState = _realtimePresenceChannel.presenceState();
+                    const now = Date.now();
+                    const onlineList = [];
+                    Object.keys(presenceState).forEach(k => {
+                        const em = k.toLowerCase().trim();
+                        if (em) onlineList.push({ email: em, timestamp: now });
+                    });
+                    _presenceCache = onlineList;
+                    _presenceFetchedAt = now;
+                    try {
+                        const raw = localStorage.getItem('nebula_presence_local');
+                        const map = raw ? JSON.parse(raw) : {};
+                        onlineList.forEach(p => {
+                            map[p.email] = { ...(map[p.email] || {}), timestamp: now };
+                        });
+                        localStorage.setItem('nebula_presence_local', JSON.stringify(map));
+                    } catch (e) {}
+                    if (typeof PageChat !== 'undefined' && typeof PageChat.renderRoomsList === 'function') {
+                        PageChat.renderRoomsList();
+                    }
+                })
+                .on('broadcast', { event: 'typing' }, ({ payload }) => {
+                    if (payload && payload.roomId && payload.email) {
+                        const sender = payload.email.toLowerCase().trim();
+                        const now = Date.now();
+                        try {
+                            const raw = localStorage.getItem('nebula_presence_local');
+                            const map = raw ? JSON.parse(raw) : {};
+                            map[sender] = { ...(map[sender] || {}), timestamp: now, typing_room: payload.roomId, typing_until: now + 4000 };
+                            localStorage.setItem('nebula_presence_local', JSON.stringify(map));
+                            localStorage.setItem(`nebula_typing_${payload.roomId}_${sender}`, now.toString());
+                            localStorage.setItem('nebula_typing_broadcast', JSON.stringify({ roomId: payload.roomId, email: sender, ts: now }));
+                        } catch (e) {}
+                    }
+                })
+                .on('broadcast', { event: 'new_msg' }, () => {
+                    if (typeof NebulaApp !== 'undefined') NebulaApp.updateBell();
+                })
+                .on('broadcast', { event: 'read' }, ({ payload }) => {
+                    if (payload && payload.reader && payload.roomId) {
+                        const now = Date.now();
+                        try {
+                            const raw = localStorage.getItem('nebula_presence_local');
+                            const map = raw ? JSON.parse(raw) : {};
+                            map[payload.reader] = { ...(map[payload.reader] || {}), read_rooms: { ...(map[payload.reader]?.read_rooms || {}), [payload.roomId]: now } };
+                            localStorage.setItem('nebula_presence_local', JSON.stringify(map));
+                        } catch (e) {}
+                    }
+                })
+                .subscribe(async (status) => {
+                    if (status === 'SUBSCRIBED') {
+                        await _realtimePresenceChannel.track({
+                            email: clean,
+                            online_at: new Date().toISOString()
+                        });
+                    }
+                });
+        } catch (e) {
+            console.warn('[Storage] initRealtimePresence error:', e);
+        }
+    }
+
     let _presenceCache = [];
     let _presenceFetchedAt = 0;
 
     async function fetchOnlinePresence(force) {
         const now = Date.now();
-        if (!force && _presenceCache.length && now - _presenceFetchedAt < 8000) {
+        if (!force && _presenceCache.length && now - _presenceFetchedAt < 4000) {
             return _presenceCache;
         }
         try {
@@ -1115,17 +1193,16 @@ const NebulaStorage = (() => {
             localStorage.setItem('nebula_presence_ping', clean + '::' + now);
         } catch (e) {}
 
-        try {
-            await fetch('/api/presence', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
+        if (_realtimePresenceChannel) {
+            try {
+                _realtimePresenceChannel.track({
                     email: clean,
                     typing_room: typingRoom || null,
-                    read_room: readRoom || null
-                })
-            });
-        } catch (e) {}
+                    read_room: readRoom || null,
+                    online_at: new Date().toISOString()
+                });
+            } catch (e) {}
+        }
     }
 
     function isUserOnline(presenceList, email, stateObj) {
@@ -1134,7 +1211,7 @@ const NebulaStorage = (() => {
         if (stateObj && (stateObj.current_user || '').toLowerCase().trim() === clean) {
             return true;
         }
-        if ((presenceList || []).some(p => p.email === clean)) return true;
+        if ((presenceList || []).some(p => (p.email || '').toLowerCase().trim() === clean)) return true;
         try {
             const raw = localStorage.getItem('nebula_presence_local');
             if (raw) {
@@ -1151,7 +1228,7 @@ const NebulaStorage = (() => {
         const cleanMine = (myEmail || '').toLowerCase().trim();
         const now = Date.now();
         return (presenceList || []).filter(p =>
-            p.email !== cleanMine &&
+            (p.email || '').toLowerCase().trim() !== cleanMine &&
             p.typing_room === roomId &&
             (p.typing_until || 0) > now
         ).map(p => p.email);
@@ -1187,6 +1264,16 @@ const NebulaStorage = (() => {
 
         if (changed) saveState(state);
         pulsePresence(reader, null, roomId).catch(() => {});
+
+        if (_realtimePresenceChannel) {
+            try {
+                _realtimePresenceChannel.send({
+                    type: 'broadcast',
+                    event: 'read',
+                    payload: { reader, peer, roomId, ts: Date.now() }
+                });
+            } catch (e) {}
+        }
     }
 
     function getMessageStatus(msg, myEmail, peerEmail, presenceList, roomId) {
@@ -1284,6 +1371,7 @@ const NebulaStorage = (() => {
         normalizeChatMessage,
         mergeMessagesUnique,
         buildDirectRoomId,
+        initRealtimePresence,
         fetchOnlinePresence,
         pulsePresence,
         isUserOnline,

@@ -141,6 +141,10 @@ const NebulaApp = (() => {
             }
         }
         updateBell();
+        if (state.current_user) {
+            NebulaStorage.initRealtimePresence(state.current_user);
+            NebulaStorage.pulsePresence(state.current_user);
+        }
         populateAccountDropdown();
         renderMobileNav();
         renderMobileHeader();

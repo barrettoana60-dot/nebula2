@@ -2021,18 +2021,38 @@ input:disabled + .slider { opacity: 0.5; cursor: not-allowed; }
 .msg-status {
     display: inline-flex;
     align-items: center;
-    gap: 2px;
-    margin-right: 0.25rem;
+    gap: 3px;
+    margin-right: 0.35rem;
 }
 .msg-dot {
-    width: 5px;
-    height: 5px;
+    width: 6px;
+    height: 6px;
     border-radius: 50%;
-    background: rgba(255,255,255,0.35);
+    background: rgba(255,255,255,0.45);
     display: inline-block;
 }
-.msg-dot.on { background: #10b981; }
-.msg-status-read .msg-dot.on { box-shadow: 0 0 4px rgba(16,185,129,0.5); }
+.msg-dot.delivered {
+    background: rgba(255,255,255,0.7);
+}
+.msg-dot.read, .msg-dot.green {
+    background: #10b981;
+    box-shadow: 0 0 5px rgba(16,185,129,0.7);
+}
+
+@keyframes msg-pop-in {
+    0% {
+        opacity: 0;
+        transform: translateY(8px) scale(0.96);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.chat-msg-row {
+    animation: msg-pop-in 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
 
 .photo-lightbox {
     position: fixed;
