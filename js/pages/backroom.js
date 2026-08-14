@@ -25,7 +25,7 @@ const PageBackroom = (() => {
                     </div>
                     <div style="display:flex; gap:0.75rem;">
                         <button class="btn btn-sm" id="br-export-global-pdf" style="background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1); color:#fff; transition: all 0.2s ease;">
-                            <span>📥</span> Exportar PDF Geral
+                            Exportar PDF Geral
                         </button>
                         <button class="btn btn-sm" id="br-exit" style="border-color:rgba(239,68,68,0.4); color:#fca5a5; background:rgba(239,68,68,0.05);">
                             <span>⎋</span> Encerrar Sessão
@@ -68,7 +68,7 @@ const PageBackroom = (() => {
             <!-- Modal de Confirmação para Exclusão de Contas -->
             <div id="br-delete-modal" class="br-modal-overlay" style="display:none;">
                 <div class="br-modal-content glass">
-                    <div style="font-size:1.5rem; font-weight:800; color:#f87171; margin-bottom:0.5rem;">⚠️ Excluir Conta Permanentemente?</div>
+                    <div style="font-size:1.5rem; font-weight:800; color:#f87171; margin-bottom:0.5rem;">Excluir Conta Permanentemente?</div>
                     <p style="font-size:0.9rem; color:var(--text-white-60); margin-bottom:1.5rem; line-height:1.5;">Esta ação removerá permanentemente o usuário <b id="br-delete-target-name" style="color:#fff"></b> da plataforma Nebula. Todos os seus PDFs no repositório, histórico de buscas, histórico de sessões de tempo e mensagens serão excluídos permanentemente no Supabase. Esta operação não pode ser desfeita.</p>
                     <div style="display:flex; justify-content:flex-end; gap:0.75rem;">
                         <button class="btn btn-sm btn-secondary" id="br-delete-cancel">Cancelar</button>
@@ -472,12 +472,12 @@ const PageBackroom = (() => {
                                 <div>
                                     <div class="br-user-name">${p.name || 'Sem Nome'}</div>
                                     <div class="br-user-email">${p.email}</div>
-                                    <div class="br-user-research">🔬 ${p.research || 'Área de pesquisa não informada'}</div>
+                                    <div class="br-user-research">${p.research || 'Área de pesquisa não informada'}</div>
                                 </div>
                             </div>
                             <div style="text-align:right; font-size:0.8rem; color:var(--text-white-60)">
                                 <div>Duração Total: <b style="color:#a78bfa; font-size:0.95rem;">${NebulaAnalytics.formatDuration(totalSec)}</b></div>
-                                <div style="margin: 0.15rem 0;">🗂️ ${docs} docs adicionados · 🔍 ${searches} pesquisas feitas</div>
+                                <div style="margin: 0.15rem 0;">${docs} docs adicionados · ${searches} pesquisas feitas</div>
                                 <div>Último login: <span style="color:#fff">${lastSeen ? new Date(lastSeen).toLocaleString('pt-BR') : '—'}</span></div>
                             </div>
                         </div>
@@ -488,10 +488,10 @@ const PageBackroom = (() => {
 
                         <div class="action-row">
                             <button class="btn btn-sm btn-secondary br-toggle-details-btn" data-email="${p.email}" style="border:1px solid rgba(255,255,255,0.08); background:rgba(255,255,255,0.02);">
-                                📊 Detalhar & Auditoria ↓
+                                Detalhar & Auditoria ↓
                             </button>
                             <button class="btn btn-sm" onclick="PageBackroom.triggerDelete('${p.email}', '${safeNameEscaped}')" style="background:rgba(239, 68, 68, 0.1); border:1px solid rgba(239,68,68,0.25); color:#fca5a5;">
-                                🗑️ Excluir Conta
+                                Excluir Conta
                             </button>
                         </div>
 
@@ -502,13 +502,13 @@ const PageBackroom = (() => {
                                         Análise Operacional de Seções
                                     </div>
                                     <div style="display:flex; flex-direction:column; gap:0.5rem; font-size:0.85rem;">
-                                        <div>⭐ <b>Seção Mais Acessada:</b> <span style="color:#c084fc; font-weight:600;">${maxSec}</span> (${maxSecTime > 0 ? NebulaAnalytics.formatDuration(maxSecTime) : '0s'})</div>
-                                        <div>📉 <b>Seção Menos Acessada:</b> ${getLeastActiveSection(sectionTimes)}</div>
+                                        <div><b>Seção Mais Acessada:</b> <span style="color:#c084fc; font-weight:600;">${maxSec}</span> (${maxSecTime > 0 ? NebulaAnalytics.formatDuration(maxSecTime) : '0s'})</div>
+                                        <div><b>Seção Menos Acessada:</b> ${getLeastActiveSection(sectionTimes)}</div>
                                     </div>
 
                                     <div style="margin-top:1.25rem; display:flex; gap:0.5rem;">
                                         <button class="btn btn-sm" onclick="PageBackroom.exportUserPDF('${p.email}')" style="background:var(--primary-gradient); border:none; color:white; font-weight:600; width:100%; display:inline-flex; align-items:center; justify-content:center; gap:0.4rem;">
-                                            📥 Exportar Relatório (PDF)
+                                            Exportar Relatório (PDF)
                                         </button>
                                     </div>
                                 </div>
@@ -661,11 +661,11 @@ const PageBackroom = (() => {
         if (isOpen) {
             panel.style.display = 'none';
             card.classList.remove('active-open');
-            btn.innerHTML = '📊 Detalhar & Auditoria ↓';
+            btn.innerHTML = 'Detalhar & Auditoria ↓';
         } else {
             panel.style.display = 'block';
             card.classList.add('active-open');
-            btn.innerHTML = '📊 Recolher Detalhes ↑';
+            btn.innerHTML = 'Recolher Detalhes ↑';
             // Renderiza o gráfico do usuário
             renderUserChart(email);
         }

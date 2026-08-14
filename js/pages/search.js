@@ -45,7 +45,7 @@ const PageSearch = (() => {
                 <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:0.8rem;flex-wrap:wrap;">
                     <div class="article-title" style="flex:1;min-width:260px;">${titleHtml}</div>
                     <div style="display:flex; gap:0.4rem; align-items:center; flex-wrap:wrap;">
-                        <span class="tag" style="background:${qualisColor}22; border-color:${qualisColor}; color:${qualisColor}; font-weight:800; font-size:0.75rem;" title="${qualisLabel}">🏆 Qualis ${qualis}</span>
+                        <span class="tag" style="background:${qualisColor}22; border-color:${qualisColor}; color:${qualisColor}; font-weight:800; font-size:0.75rem;" title="${qualisLabel}">Qualis ${qualis}</span>
                         <span class="tag" style="font-size:0.7rem;white-space:nowrap;background:rgba(59,130,246,0.12);border-color:rgba(59,130,246,0.35);color:var(--color-blue)">${provider}</span>
                     </div>
                 </div>
@@ -123,7 +123,7 @@ const PageSearch = (() => {
         const historyChipsHtml = uniqueHistory.length ? `
             <div style="display:flex; gap:0.4rem; flex-wrap:wrap; align-items:center;">
                 ${uniqueHistory.slice(0, 10).map(h =>
-                    `<button class="btn btn-sm" style="font-size:0.73rem; padding:3px 9px; background:rgba(59,130,246,0.1); border:1px solid rgba(59,130,246,0.3); color:var(--color-blue);" onclick="PageSearch.quickTerm('${(h.query || '').replace(/'/g, "\\'")}')">🕒 ${h.query}</button>`
+                    `<button class="btn btn-sm" style="font-size:0.73rem; padding:3px 9px; background:rgba(59,130,246,0.1); border:1px solid rgba(59,130,246,0.3); color:var(--color-blue);" onclick="PageSearch.quickTerm('${(h.query || '').replace(/'/g, "\\'")}')">${h.query}</button>`
                 ).join('')}
                 <button class="btn btn-sm" style="font-size:0.7rem; padding:2px 8px; color:#ef4444; border-color:rgba(239,68,68,0.3);" onclick="PageSearch.clearHistory()">Limpar</button>
             </div>

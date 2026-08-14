@@ -438,7 +438,7 @@ const PageChat = (() => {
         if (!msgs.length) {
             msgContainer.innerHTML = `<div style="padding:2rem; text-align:center; color:var(--text-white-60); font-size:0.9rem;">
                 ${room.kind === 'ai'
-                    ? '<div style="font-size:2rem;margin-bottom:0.75rem;">🤖</div><b>Llama 3.3</b><br><span style="font-size:0.82rem;">Inteligência Artificial para Pesquisa Acadêmica<br>Pergunte sobre sua área de pesquisa, referências, metodologia...</span>'
+                    ? '<div style="width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,#3b82f6,#1d4ed8);display:flex;align-items:center;justify-content:center;font-size:1.1rem;font-weight:800;color:#fff;margin:0 auto 0.75rem;">IA</div><b>Llama 3.3</b><br><span style="font-size:0.82rem;">Inteligência Artificial para Pesquisa Acadêmica<br>Pergunte sobre sua área de pesquisa, referências, metodologia...</span>'
                     : 'Nenhuma mensagem ainda. Digite sua mensagem abaixo!'}
             </div>`;
             return;

@@ -105,12 +105,12 @@ const PageRepository = (() => {
 
             if (!state.repository) state.repository = [];
 
-            let addedCount = 0;
+            const pendingDocs = [];
             for (let i = 0; i < selectedFiles.length; i++) {
                 const file = selectedFiles[i];
                 const baseProgress = Math.round(((i + 1) / selectedFiles.length) * 100);
                 fill.style.width = `${baseProgress}%`;
-                txt.textContent = `Processando e analisando ${file.name} (${i + 1}/${selectedFiles.length})...`;
+                txt.textContent = `Processando ${file.name} (${i + 1}/${selectedFiles.length})...`;
                 
                 try {
                     const record = await DocumentEngine.makeDocumentRecord(file, (stage) => {
@@ -119,26 +119,7 @@ const PageRepository = (() => {
                     
                     record.visibility = visibility;
                     record.public_until = visibility === 'public' ? publicUntil : null;
-
-                    // Checar se o autor tem o mesmo nome do usuário logado (Produção Autoral)
-                    const authorLower = (record.author || '').toLowerCase().trim();
-                    if (userName && authorLower && (authorLower.includes(userName) || userName.includes(authorLower))) {
-                        record.topic = 'Produção Autoral';
-                        record.is_authorial = true;
-                    }
-
-                    // Adicionar ao repositório
-                    state.repository.push(record);
-                    addedCount++;
-
-                    // Atualizar interesses do usuário
-                    if (email) {
-                        if (!state.user_interest[email]) state.user_interest[email] = {};
-                        (record.keywords || []).slice(0, 12).forEach(t => {
-                            const k = (t || '').toLowerCase().trim();
-                            if (k) state.user_interest[email][k] = (state.user_interest[email][k] || 0) + 1;
-                        });
-                    }
+                    pendingDocs.push(record);
                 } catch (e) {
                     console.error('Failed to process', file.name, e);
                     txt.textContent = `Erro ao processar ${file.name}`;
@@ -146,27 +127,158 @@ const PageRepository = (() => {
             }
 
             fill.style.width = '100%';
-            txt.textContent = `Salvo com sucesso! ${addedCount} documento(s) arquivado(s).`;
-            txt.style.color = '#10b981';
+            wrap.style.display = 'none';
+            txt.style.display = 'none';
 
-            try {
-                await NebulaStorage.saveStateAsync(state);
-            } catch (saveErr) {
-                console.warn('Save async fallback to local:', saveErr);
-            }
-
-            selectedFiles = [];
-            fileInput.value = '';
-            document.getElementById('repo-file-name').textContent = 'Clique ou arraste arquivos aqui';
-            
-            setTimeout(() => {
-                wrap.style.display = 'none';
-                txt.style.display = 'none';
-                txt.style.color = '';
+            if (!pendingDocs.length) {
                 btn.disabled = false;
                 btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><polyline points="20 6 9 17 4 12"/></svg> Analisar e adicionar';
+                alert('Nenhum arquivo pôde ser processado.');
+                return;
+            }
+
+            // Oculta botão enquanto revisa
+            btn.style.display = 'none';
+
+            const existingReview = document.getElementById('repo-review-container');
+            if (existingReview) existingReview.remove();
+
+            const reviewContainer = document.createElement('div');
+            reviewContainer.id = 'repo-review-container';
+            reviewContainer.className = 'glass mt-1';
+            
+            let currentReviewIndex = 0;
+            
+            const renderReview = () => {
+                if (currentReviewIndex >= pendingDocs.length) {
+                    finishUpload();
+                    return;
+                }
+                const doc = pendingDocs[currentReviewIndex];
+                reviewContainer.innerHTML = `
+                    <div class="section-title" style="border:none; padding:0; margin-bottom:1rem;">
+                        Revisar e Editar Metadados (${currentReviewIndex + 1} de ${pendingDocs.length})
+                    </div>
+                    <div class="input-group">
+                        <label class="input-label">Título do Documento</label>
+                        <input type="text" class="input" id="rev-name" value="${(doc.title || doc.name || '').replace(/"/g, '&quot;')}">
+                    </div>
+                    <div class="grid-50-50" style="gap:1rem;">
+                        <div class="input-group">
+                            <label class="input-label">Autor(es)</label>
+                            <input type="text" class="input" id="rev-author" value="${(doc.author || '').replace(/"/g, '&quot;')}">
+                        </div>
+                        <div class="input-group">
+                            <label class="input-label">Ano de Publicação</label>
+                            <input type="text" class="input" id="rev-year" value="${doc.year || ''}">
+                        </div>
+                    </div>
+                    <div class="grid-50-50" style="gap:1rem;">
+                        <div class="input-group">
+                            <label class="input-label">Tipo de Acervo / Documento</label>
+                            <select class="select" id="rev-doc-type" style="height:38px;">
+                                <option value="Artigo Periódico" ${(doc.document_type === 'Artigo Periódico' || !doc.document_type) ? 'selected' : ''}>Artigo Periódico</option>
+                                <option value="Tese de Doutorado" ${doc.document_type === 'Tese de Doutorado' ? 'selected' : ''}>Tese de Doutorado</option>
+                                <option value="Dissertação de Mestrado" ${doc.document_type === 'Dissertação de Mestrado' ? 'selected' : ''}>Dissertação de Mestrado</option>
+                                <option value="Monografia / TCC" ${doc.document_type === 'Monografia / TCC' ? 'selected' : ''}>Monografia / TCC</option>
+                                <option value="Trabalho em Congresso" ${doc.document_type === 'Trabalho em Congresso' ? 'selected' : ''}>Trabalho em Congresso</option>
+                                <option value="Livro / Capítulo" ${doc.document_type === 'Livro / Capítulo' ? 'selected' : ''}>Livro / Capítulo</option>
+                                <option value="Relatório Técnico" ${doc.document_type === 'Relatório Técnico' ? 'selected' : ''}>Relatório Técnico</option>
+                                <option value="Projeto de Pesquisa" ${doc.document_type === 'Projeto de Pesquisa' ? 'selected' : ''}>Projeto de Pesquisa</option>
+                                <option value="Dataset / Planilha" ${doc.document_type === 'Dataset / Planilha' ? 'selected' : ''}>Dataset / Planilha</option>
+                                <option value="Figura Científica" ${doc.document_type === 'Figura Científica' ? 'selected' : ''}>Figura Científica</option>
+                            </select>
+                        </div>
+                        <div class="input-group">
+                            <label class="input-label">Tópico Principal / Pasta</label>
+                            <input type="text" class="input" id="rev-topic" value="${(doc.topic || 'Geral').replace(/"/g, '&quot;')}">
+                        </div>
+                    </div>
+                    <div class="input-group">
+                        <label class="input-label">Palavras-chave (separadas por vírgula)</label>
+                        <input type="text" class="input" id="rev-keywords" value="${(doc.keywords || []).join(', ').replace(/"/g, '&quot;')}">
+                    </div>
+                    <div class="input-group">
+                        <label class="input-label">Resumo do Documento</label>
+                        <textarea class="input" id="rev-summary" style="height:100px; resize:vertical;">${doc.summary || ''}</textarea>
+                    </div>
+                    <div style="display:flex; gap:1rem; margin-top:1.25rem;">
+                        <button class="btn btn-primary" id="rev-confirm-btn" style="flex:1; padding:0.6rem; font-weight:700;">Confirmar e Salvar no Repositório</button>
+                        <button class="btn btn-red" id="rev-discard-btn" style="flex:0.4; padding:0.6rem;">Descartar</button>
+                    </div>
+                `;
+                
+                document.getElementById('rev-confirm-btn').addEventListener('click', () => {
+                    const nameVal = document.getElementById('rev-name').value.trim();
+                    const authorVal = document.getElementById('rev-author').value.trim();
+                    const yearVal = document.getElementById('rev-year').value.trim();
+                    const docTypeVal = document.getElementById('rev-doc-type').value;
+                    const topicVal = document.getElementById('rev-topic').value.trim() || 'Geral';
+                    const keywordsVal = document.getElementById('rev-keywords').value.split(',').map(s => s.trim()).filter(Boolean);
+                    const summaryVal = document.getElementById('rev-summary').value.trim();
+                    
+                    doc.name = nameVal || doc.name;
+                    doc.title = nameVal || doc.title;
+                    doc.author = authorVal || 'Desconhecido';
+                    doc.year = yearVal || doc.year;
+                    doc.document_type = docTypeVal;
+                    doc.topic = topicVal;
+                    doc.keywords = keywordsVal;
+                    doc.summary = summaryVal;
+                    
+                    // Checar se o autor é o próprio usuário
+                    const authorLower = (doc.author || '').toLowerCase().trim();
+                    if (userName && authorLower && (authorLower.includes(userName) || userName.includes(authorLower))) {
+                        doc.topic = 'Produção Autoral';
+                        doc.is_authorial = true;
+                    }
+
+                    // Gravar imediatamente no repositório em memória
+                    state.repository.push(doc);
+                    
+                    // Atualizar interesses do usuário
+                    if (email) {
+                        if (!state.user_interest[email]) state.user_interest[email] = {};
+                        doc.keywords.slice(0, 12).forEach(t => {
+                            const k = (t || '').toLowerCase().trim();
+                            if (k) state.user_interest[email][k] = (state.user_interest[email][k] || 0) + 1;
+                        });
+                    }
+                    
+                    currentReviewIndex++;
+                    renderReview();
+                });
+                
+                document.getElementById('rev-discard-btn').addEventListener('click', () => {
+                    currentReviewIndex++;
+                    renderReview();
+                });
+            };
+            
+            document.getElementById('repo-upload-container').appendChild(reviewContainer);
+            renderReview();
+            
+            async function finishUpload() {
+                reviewContainer.remove();
+                btn.style.display = 'inline-flex';
+                btn.disabled = true;
+                btn.innerHTML = 'Salvando no repositório...';
+                
+                try {
+                    NebulaStorage.saveState(state);
+                    await NebulaStorage.saveStateAsync(state);
+                } catch (saveErr) {
+                    console.warn('Save async fallback to local:', saveErr);
+                }
+
+                btn.disabled = false;
+                btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><polyline points="20 6 9 17 4 12"/></svg> Analisar e adicionar';
+                
+                selectedFiles = [];
+                fileInput.value = '';
+                document.getElementById('repo-file-name').textContent = 'Clique ou arraste arquivos aqui';
                 renderList(document.getElementById('repo-list-container'), state);
-            }, 1200);
+            }
         });
     }
 
@@ -182,6 +294,7 @@ const PageRepository = (() => {
         window._deleteRepositoryDoc = async (id) => {
             if (confirm('Tem certeza que deseja excluir este arquivo do seu repositório? Essa ação não pode ser desfeita.')) {
                 state.repository = state.repository.filter(d => d.id !== id);
+                NebulaStorage.saveState(state);
                 await NebulaStorage.saveStateAsync(state);
                 renderList(container, state);
             }
@@ -244,7 +357,7 @@ const PageRepository = (() => {
                             <div style="position: absolute; inset: 0; background: radial-gradient(circle at 80% 20%, rgba(255,255,255,0.2) 0%, transparent 60%);"></div>
                             <!-- Folder icon and tagline -->
                             <div style="position: absolute; bottom: 10px; left: 14px; display: flex; align-items: center; gap: 8px;">
-                                <span style="font-size: 1.5rem; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));">📁</span>
+                                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
                             </div>
                             <div style="position: absolute; top: 10px; right: 12px; font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(255,255,255,0.95); background: rgba(0,0,0,0.22); padding: 2px 8px; border-radius: 20px; backdrop-filter: blur(6px);">PASTA</div>
                         </div>
@@ -887,7 +1000,7 @@ const PageRepository = (() => {
                                 <span id="reader-current-page" style="font-size:0.82rem; color:var(--color-blue); font-weight:700;"></span>
                             </div>
                             <div style="display:flex; align-items:center; gap:0.6rem;">
-                                <button class="btn btn-sm" onclick="navigator.clipboard.writeText('${(doc.author||'AUTOR').toUpperCase()}, ${(doc.author||'Nome')}. ${(doc.name||'Título')}. ${(doc.topic||'Área')}, ${doc.year||'2024'}.'); alert('Citação ABNT copiada!');" style="font-size:0.75rem;">📋 Citação ABNT</button>
+                                <button class="btn btn-sm" onclick="navigator.clipboard.writeText('${(doc.author||'AUTOR').toUpperCase()}, ${(doc.author||'Nome')}. ${(doc.name||'Título')}. ${(doc.topic||'Área')}, ${doc.year||'2024'}.'); alert('Citação ABNT copiada!');" style="font-size:0.75rem;">Copiar Citação ABNT</button>
                                 <span style="color:var(--text-white-60); font-size:0.8rem;">Ir p/ página:</span>
                                 <input id="reader-page-jump" type="number" min="1" max="${doc.pages.length}" style="width:55px; background:rgba(255,255,255,0.5); border:1px solid rgba(0,0,0,0.15); border-radius:7px; color:var(--text-white); padding:0.25rem 0.4rem; font-size:0.82rem; text-align:center; outline:none;" placeholder="#">
                             </div>
@@ -926,7 +1039,7 @@ const PageRepository = (() => {
                     const btnDisabled = doc.highlights.length === 0 ? 'disabled style="opacity: 0.5; cursor: not-allowed; width:100%; font-size:0.8rem; padding:0.5rem; background:transparent; border:1px solid rgba(249,115,22,0.2); color:var(--text-white-60); margin-bottom:1rem;"' : 'style="width:100%; font-size:0.8rem; padding:0.5rem; background:transparent; border:1px solid rgba(249,115,22,0.4); color:var(--color-orange); font-weight:600; margin-bottom:1rem; cursor:pointer;"';
                     const btnHtml = `
                         <button class="btn btn-secondary" ${btnDisabled} onclick="window._reanalyzeWithHighlights('${doc.id}', this)">
-                            ✨ Reanalisar com Destaques
+                            Reanalisar com Destaques
                         </button>
                     `;
                     const listHtml = doc.highlights.length === 0 
