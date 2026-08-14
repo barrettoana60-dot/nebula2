@@ -294,6 +294,16 @@ const PageSearch = (() => {
         resContainer.innerHTML = html;
     }
 
+    function quickTerm(term) {
+        const input = document.getElementById('search-query');
+        if (input) input.value = term;
+        if (searchTab === 'users') {
+            performUserSearch(term, NebulaApp.getState());
+        } else {
+            performSearch(term, null, NebulaApp.getState());
+        }
+    }
+
     function clearHistory() {
         const state = NebulaApp.getState();
         const email = (state.current_user || '').toLowerCase().trim();
