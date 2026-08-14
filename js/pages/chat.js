@@ -181,12 +181,21 @@ const PageChat = (() => {
 
         let cloudMsgs = [];
         try {
-            cloudMsgs = await NebulaStorage.fetchMessagesFromSupabase(targetRoomId, cleanMine, cleanPeer);
+            // Try incremental fetch: ask server only for messages newer than our last local message
+            const lastLocal = localRoomMsgs.length ? localRoomMsgs[localRoomMsgs.length - 1] : null;
+            const lastTs = lastLocal ? (lastLocal.timestamp || (lastLocal.created_at ? new Date(lastLocal.created_at).getTime() : 0)) : 0;
+            if (lastTs) {
+                const unread = await NebulaStorage.fetchUnreadMessagesFromSupabase(cleanMine, lastTs);
+                // filter to this room
+                cloudMsgs = (unread || []).filter(m => (m.room_id || '') === targetRoomId);
+            } else {
+                cloudMsgs = await NebulaStorage.fetchMessagesFromSupabase(targetRoomId, cleanMine, cleanPeer);
+            }
             if (cloudMsgs && cloudMsgs.length > 0) {
                 // Cache any new cloud messages in local store
                 saveStoredMessages(NebulaStorage.mergeMessagesUnique(getStoredMessages(), cloudMsgs));
             }
-        } catch (e) {}
+        } catch (e) { console.warn('[Chat] fetch cloud messages failed:', e); }
 
         const pending = _optimisticMsgs.filter(m =>
             messageBelongsToRoom(m, targetRoomId, cleanMine, cleanPeer, false)
@@ -381,7 +390,7 @@ const PageChat = (() => {
         }
 
         loadMessages();
-        _pollTimer = setInterval(loadMessages, 2000);
+        _pollTimer = setInterval(loadMessages, 3000);
     }
 
     async function selectPeer(peerEmail) {
