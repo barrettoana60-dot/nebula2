@@ -1,19 +1,72 @@
-/* PAGE: EDITOR (Doc & Mapa Mental) */
+/* PAGE: EDITOR (Editor de Texto & Mapa Mental) */
 const PageEditor = (() => {
 
+    function getDocStorageKey(userEmail) {
+        return `nebula_docs_v2_${(userEmail || '').toLowerCase().trim()}`;
+    }
+
+    function loadUserDocs(userEmail) {
+        try {
+            const raw = localStorage.getItem(getDocStorageKey(userEmail));
+            const list = JSON.parse(raw || '[]');
+            if (Array.isArray(list) && list.length > 0) return list;
+        } catch {}
+        
+        // Fallback or legacy doc
+        const legacy = localStorage.getItem(`nebula_editor_${userEmail}`) || '';
+        return [{
+            id: 'doc_' + Date.now(),
+            title: 'Meu Artigo Acadêmico',
+            content: legacy || '<h2>Meu Artigo Acadêmico</h2><p>Comece a redigir seu texto científico aqui...</p>',
+            updatedAt: new Date().toISOString()
+        }];
+    }
+
+    function saveUserDocs(userEmail, docs) {
+        try {
+            localStorage.setItem(getDocStorageKey(userEmail), JSON.stringify(docs));
+        } catch {}
+    }
+
     function renderEditor(container, state) {
-        let content = localStorage.getItem(`nebula_editor_${state.current_user}`) || '';
+        const userEmail = (state.current_user || '').toLowerCase().trim();
+        let docs = loadUserDocs(userEmail);
+        let activeDocId = docs[0]?.id;
+
+        function getActiveDoc() {
+            return docs.find(d => d.id === activeDocId) || docs[0];
+        }
 
         container.innerHTML = `
-            <div class="glass" style="min-height: 600px; display: flex; flex-direction: column;">
-                <div class="section-title" style="display:flex; justify-content:space-between; align-items:center;">
-                    <span>Editor de Texto</span>
-                    <div style="display:flex; gap:0.5rem;">
-                        <button class="btn btn-sm btn-primary" id="btn-new-doc" style="gap:0.3rem;">+ Novo Documento</button>
-                        <button class="btn btn-sm" id="btn-export-doc">Exportar PDF</button>
+            <div class="glass" style="min-height: 650px; display: flex; flex-direction: column;">
+                <div class="section-title" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem; margin-bottom:0.75rem;">
+                    <div style="display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap;">
+                        <span style="font-size:1.2rem; font-weight:800; color:var(--text-white);">Editor de Texto</span>
+                        <span class="tag tag-copper" style="font-size:0.72rem;">Produção Científica &amp; ABNT</span>
+                    </div>
+                    <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+                        <button class="btn btn-sm btn-primary" id="btn-new-doc" style="gap:0.3rem; font-weight:700;">+ Novo Documento</button>
+                        <button class="btn btn-sm btn-blue" id="btn-export-doc">Exportar PDF</button>
+                        <button class="btn btn-sm btn-red" id="btn-delete-current-doc" title="Excluir este documento">Excluir</button>
                     </div>
                 </div>
-                <p class="small-muted mb-1">Escreva seus artigos e notas acadêmicas com salvamento automático e formatação completa.</p>
+
+                <!-- Barra de Documentos & Título -->
+                <div style="display:flex; gap:0.75rem; align-items:center; margin-bottom:1rem; flex-wrap:wrap; background:rgba(218,200,179,0.35); padding:0.6rem 0.9rem; border-radius:12px; border:1px solid rgba(0,0,0,0.06);">
+                    <div style="display:flex; align-items:center; gap:0.5rem;">
+                        <span style="font-size:0.8rem; font-weight:700; color:var(--text-white-60);">Documento:</span>
+                        <select id="doc-switcher" class="select" style="min-width:180px; padding:0.3rem 0.6rem; font-size:0.85rem; height:32px;">
+                            ${docs.map(d => `<option value="${d.id}" ${d.id === activeDocId ? 'selected' : ''}>${d.title}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div style="flex:1; min-width:200px; display:flex; align-items:center; gap:0.5rem;">
+                        <span style="font-size:0.8rem; font-weight:700; color:var(--text-white-60);">Título:</span>
+                        <input type="text" id="doc-title-input" class="input" value="${getActiveDoc().title}" style="height:32px; font-size:0.88rem; font-weight:600;" placeholder="Título do documento...">
+                    </div>
+                    <div id="doc-metrics-badge" style="font-size:0.75rem; color:var(--text-white-60); margin-left:auto;">
+                        0 palavras
+                    </div>
+                </div>
                 
                 <div id="editor-toolbar" style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-bottom:1rem; padding:0.8rem; background:rgba(0,0,0,0.3); border-radius:16px; border:1px solid var(--glass-border); align-items:center; box-shadow: inset 0 2px 10px rgba(0,0,0,0.2);">
                     
@@ -72,14 +125,84 @@ const PageEditor = (() => {
                     <button class="btn btn-sm" id="btn-clear-doc" title="Apagar Todo o Texto" style="min-height:30px; padding:0 0.6rem; color:#fca5a5; border-color:rgba(239, 68, 68, 0.3);">Limpar Tudo</button>
                 </div>
                 
-                <div id="editor-area" contenteditable="true" style="flex:1; background:rgba(255,255,255,0.02); border:1px solid var(--glass-border); border-radius:12px; padding:2rem; color:var(--text-white); font-size:1.1rem; line-height:1.8; outline:none; overflow-y:auto; font-family: Arial, sans-serif; box-shadow: inset 0 5px 20px rgba(0,0,0,0.2);">
-                    ${content}
+                <div id="editor-area" contenteditable="true" style="flex:1; min-height:420px; background:rgba(255,255,255,0.02); border:1px solid var(--glass-border); border-radius:12px; padding:2rem; color:var(--text-white); font-size:1.1rem; line-height:1.8; outline:none; overflow-y:auto; font-family: Arial, sans-serif; box-shadow: inset 0 5px 20px rgba(0,0,0,0.2);">
+                    ${getActiveDoc().content}
                 </div>
                 <div class="small-muted mt-1" id="editor-status" style="text-align:right;">Salvo localmente.</div>
             </div>
         `;
 
         const area = document.getElementById('editor-area');
+        const titleInput = document.getElementById('doc-title-input');
+        const docSwitcher = document.getElementById('doc-switcher');
+        const metricsBadge = document.getElementById('doc-metrics-badge');
+
+        function updateMetrics() {
+            const text = area.innerText || '';
+            const words = text.trim() ? text.trim().split(/\s+/).length : 0;
+            const chars = text.length;
+            if (metricsBadge) metricsBadge.textContent = `${words} palavras · ${chars} caracteres`;
+        }
+
+        updateMetrics();
+
+        // Switch doc handler
+        docSwitcher.addEventListener('change', (e) => {
+            activeDocId = e.target.value;
+            const current = getActiveDoc();
+            area.innerHTML = current.content;
+            titleInput.value = current.title;
+            updateMetrics();
+            document.getElementById('editor-status').innerText = 'Documento carregado.';
+        });
+
+        // Title rename handler
+        titleInput.addEventListener('input', () => {
+            const current = getActiveDoc();
+            current.title = titleInput.value.trim() || 'Sem título';
+            current.updatedAt = new Date().toISOString();
+            saveUserDocs(userEmail, docs);
+            const opt = docSwitcher.querySelector(`option[value="${activeDocId}"]`);
+            if (opt) opt.textContent = current.title;
+        });
+
+        // New doc button
+        document.getElementById('btn-new-doc').addEventListener('click', () => {
+            const newTitle = prompt('Nome do novo documento:', 'Novo Documento ' + (docs.length + 1));
+            if (newTitle === null) return;
+            const newDoc = {
+                id: 'doc_' + Date.now(),
+                title: newTitle.trim() || 'Novo Documento',
+                content: `<h2>${newTitle.trim() || 'Novo Documento'}</h2><p>Comece a escrever aqui...</p>`,
+                updatedAt: new Date().toISOString()
+            };
+            docs.unshift(newDoc);
+            activeDocId = newDoc.id;
+            saveUserDocs(userEmail, docs);
+            renderEditor(container, state);
+        });
+
+        // Delete current doc
+        document.getElementById('btn-delete-current-doc').addEventListener('click', () => {
+            if (docs.length <= 1) {
+                if (confirm('Limpar o conteúdo do único documento restante?')) {
+                    area.innerHTML = '';
+                    const cur = getActiveDoc();
+                    cur.content = '';
+                    cur.title = 'Documento em Branco';
+                    titleInput.value = cur.title;
+                    saveUserDocs(userEmail, docs);
+                    updateMetrics();
+                }
+                return;
+            }
+            if (confirm(`Excluir o documento "${getActiveDoc().title}"?`)) {
+                docs = docs.filter(d => d.id !== activeDocId);
+                activeDocId = docs[0].id;
+                saveUserDocs(userEmail, docs);
+                renderEditor(container, state);
+            }
+        });
         
         // --- Comandos de Formatação ---
         document.querySelectorAll('.format-btn').forEach(btn => {
@@ -167,33 +290,33 @@ const PageEditor = (() => {
         // --- Auto-Save ---
         let timeout;
         area.addEventListener('input', () => {
+            updateMetrics();
             clearTimeout(timeout);
             document.getElementById('editor-status').innerText = 'Salvando...';
             timeout = setTimeout(() => {
+                const current = getActiveDoc();
+                current.content = area.innerHTML;
+                current.updatedAt = new Date().toISOString();
+                saveUserDocs(userEmail, docs);
                 localStorage.setItem(`nebula_editor_${state.current_user}`, area.innerHTML);
                 document.getElementById('editor-status').innerText = 'Salvo localmente.';
-            }, 1000);
-        });
-
-        document.getElementById('btn-new-doc')?.addEventListener('click', () => {
-            if (confirm('Criar um novo documento em branco? O rascunho anterior será limpo.')) {
-                area.innerHTML = '<h2>Título do Novo Documento</h2><p>Comece a escrever seu trabalho acadêmico aqui...</p>';
-                localStorage.setItem(`nebula_editor_${state.current_user}`, area.innerHTML);
-                document.getElementById('editor-status').innerText = 'Novo documento criado.';
-                area.focus();
-            }
+            }, 500);
         });
 
         // --- PDF Export e Limpar ---
-        document.getElementById('btn-export-doc').addEventListener('click', () => {
-            exportPDF(area, 'Documento');
+        document.getElementById('btn-export-doc')?.addEventListener('click', () => {
+            exportPDF(area, getActiveDoc().title || 'Documento');
         });
 
-        document.getElementById('btn-clear-doc').addEventListener('click', () => {
-            if(confirm('Tem certeza que deseja apagar todo o texto do documento? Esta ação não pode ser desfeita.')) {
+        document.getElementById('btn-clear-doc')?.addEventListener('click', () => {
+            if (confirm('Tem certeza que deseja apagar todo o texto do documento atual?')) {
                 area.innerHTML = '';
+                const current = getActiveDoc();
+                current.content = '';
+                saveUserDocs(userEmail, docs);
                 localStorage.removeItem(`nebula_editor_${state.current_user}`);
                 document.getElementById('editor-status').innerText = 'Documento limpo.';
+                updateMetrics();
                 area.focus();
             }
         });

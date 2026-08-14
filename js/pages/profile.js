@@ -104,7 +104,7 @@ const PageProfile = (() => {
                 <div class="mobile-profile-identity">
                     <div class="mobile-profile-left">
                         <div class="mobile-profile-avatar-wrap">
-                            <div class="mobile-profile-avatar" id="prof-avatar-display" style="cursor:pointer;">${user.photo ? `<img src="${user.photo}" alt="Foto" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;">` : (user.name || 'P').trim().charAt(0).toUpperCase()}</div>
+                            <div class="mobile-profile-avatar" id="prof-avatar-display" style="cursor:${user.photo ? 'pointer' : 'default'};" ${user.photo ? `onclick="PageChat.openPhotoViewer('${user.photo.replace(/'/g, "\\'")}','${(user.name || '').replace(/'/g, "\\'")}')"` : ''}>${user.photo ? `<img src="${user.photo}" alt="Foto" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;">` : (user.name || 'P').trim().charAt(0).toUpperCase()}</div>
                             <button type="button" class="prof-photo-btn" id="prof-photo-btn" title="Alterar foto">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
                             </button>

@@ -291,6 +291,23 @@ const DocumentEngine = (() => {
         });
     }
 
+    function detectAcademicDocType(text, fileName, kind) {
+        const t = (text || '').toLowerCase();
+        const f = (fileName || '').toLowerCase();
+        
+        if (t.includes('tese de doutorado') || t.includes('tese apresentada') || t.includes('grau de doutor')) return 'Tese de Doutorado';
+        if (t.includes('dissertação de mestrado') || t.includes('dissertacao de mestrado') || t.includes('grau de mestre')) return 'Dissertação de Mestrado';
+        if (t.includes('trabalho de conclusão de curso') || t.includes('tcc') || t.includes('monografia')) return 'Monografia / TCC';
+        if (t.includes('anais do') || t.includes('congresso') || t.includes('simpósio') || t.includes('simposio') || t.includes('encontro nacional')) return 'Trabalho em Congresso';
+        if (t.includes('relatório técnico') || t.includes('relatorio tecnico') || t.includes('relatório de pesquisa')) return 'Relatório Técnico';
+        if (t.includes('projeto de pesquisa') || t.includes('plano de trabalho')) return 'Projeto de Pesquisa';
+        if (t.includes('livro') || t.includes('capítulo de livro') || t.includes('capitulo de livro') || t.includes('isbn')) return 'Livro / Capítulo';
+        if (kind === 'Imagem') return 'Figura / Imagem Científica';
+        if (kind === 'Planilha' || kind === 'CSV') return 'Dataset / Planilha de Dados';
+        if (kind === 'Código') return 'Script / Código Computacional';
+        return 'Artigo Periódico';
+    }
+
     async function makeDocumentRecord(file, progressCallback, userResearch) {
         const fileName = file.name;
         const kind = fileKind(fileName);
@@ -357,7 +374,8 @@ const DocumentEngine = (() => {
 
         // 3. Usar dados da IA se disponíveis, senão fallback para TextEngine local
         let keywords, topic, summary, author, language, nationality, year;
-        let docType = kind;
+        const autoAcademicType = detectAcademicDocType(text, fileName, kind);
+        let docType = aiData ? aiData.document_type || autoAcademicType : autoAcademicType;
         let keyFindings = null;
         let methodology = null;
         let refCount = 0;
@@ -371,7 +389,6 @@ const DocumentEngine = (() => {
             language = aiData.language || TextEngine.detectLanguage(text);
             nationality = aiData.nationality || TextEngine.inferNationality(text || fileName);
             year = aiData.year || (TextEngine.detectYears(text)[0] || new Date().getFullYear());
-            docType = aiData.document_type || kind;
             keyFindings = aiData.key_findings;
             methodology = aiData.methodology;
             refCount = aiData.references_detected || 0;

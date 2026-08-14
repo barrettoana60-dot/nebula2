@@ -10,25 +10,56 @@ const PageSearch = (() => {
 
     let searchTab = 'articles'; // 'articles' | 'users'
 
+    function getStoredSearchHistory(userEmail) {
+        try {
+            const key = 'nebula_search_history_v3_' + (userEmail || '').toLowerCase().trim();
+            const stored = JSON.parse(localStorage.getItem(key) || '[]');
+            return Array.isArray(stored) ? stored : [];
+        } catch { return []; }
+    }
+
+    function saveStoredSearchHistory(userEmail, list) {
+        try {
+            const key = 'nebula_search_history_v3_' + (userEmail || '').toLowerCase().trim();
+            localStorage.setItem(key, JSON.stringify(list.slice(0, 30)));
+        } catch {}
+    }
+
     function renderArticleCard(art, showAffinity = true) {
         const titleHtml = art.url
-            ? `<a href="${art.url}" target="_blank" rel="noopener">${art.title}</a>`
-            : art.title;
+            ? `<a href="${art.url}" target="_blank" rel="noopener" style="color:var(--text-white);text-decoration:none;font-weight:700;font-size:1.02rem;">${art.title}</a>`
+            : `<span style="font-weight:700;font-size:1.02rem;color:var(--text-white);">${art.title}</span>`;
         const provider = art.provider || art.source || 'Acadêmico';
+        const qualis = art.qualis || 'B1';
+        const qualisColor = art.qualisColor || '#3b82f6';
+        const qualisLabel = art.qualisLabel || `Qualis ${qualis}`;
+
         const affinityHtml = showAffinity && art.affinityPct != null ? `
             <div style="display:flex;align-items:center;gap:0.6rem;margin-top:0.55rem;flex-wrap:wrap">
                 <div class="sim-bar-wrap" style="flex:1;min-width:120px;margin:0"><div class="sim-bar-fill" style="width:${art.affinityPct}%"></div></div>
                 <span class="tag tag-copper" style="white-space:nowrap;font-size:0.72rem">${art.affinityPct}% relevância</span>
             </div>` : '';
+
         return `
-            <div class="article-card">
-                <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:0.8rem">
-                    <div class="article-title" style="flex:1">${titleHtml}</div>
-                    <span class="tag" style="font-size:0.7rem;white-space:nowrap;background:rgba(59,130,246,0.12);border-color:rgba(59,130,246,0.35);color:var(--color-blue)">${provider}</span>
+            <div class="article-card" style="padding:1.2rem; margin-bottom:1rem;">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:0.8rem;flex-wrap:wrap;">
+                    <div class="article-title" style="flex:1;min-width:260px;">${titleHtml}</div>
+                    <div style="display:flex; gap:0.4rem; align-items:center; flex-wrap:wrap;">
+                        <span class="tag" style="background:${qualisColor}22; border-color:${qualisColor}; color:${qualisColor}; font-weight:800; font-size:0.75rem;" title="${qualisLabel}">🏆 Qualis ${qualis}</span>
+                        <span class="tag" style="font-size:0.7rem;white-space:nowrap;background:rgba(59,130,246,0.12);border-color:rgba(59,130,246,0.35);color:var(--color-blue)">${provider}</span>
+                    </div>
                 </div>
-                <div class="article-meta">${art.authors || 'Não informado'} · ${art.year || '?'} · ${art.citations || 0} citações</div>
-                <div class="article-abstract">${(art.abstract || 'Resumo indisponível.').slice(0, 260)}${(art.abstract || '').length > 260 ? '...' : ''}</div>
-                <div style="margin-top:0.5rem"><span class="tag">${art.topic || 'Pesquisa Geral'}</span></div>
+                <div class="article-meta" style="margin-top:0.4rem;font-size:0.82rem;color:var(--text-white-60);">
+                    <b>Autores:</b> ${art.authors || 'Não informado'} · <b>Ano:</b> ${art.year || '?'} · <b>Periódico:</b> ${art.journal || art.source || 'Revista Científica'} · <b>Citações:</b> ${art.citations || 0}
+                </div>
+                <div class="article-abstract" style="margin-top:0.5rem;font-size:0.85rem;line-height:1.5;color:var(--text-white-80);">${(art.abstract || 'Resumo indisponível.').slice(0, 320)}${(art.abstract || '').length > 320 ? '...' : ''}</div>
+                <div style="margin-top:0.6rem; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem;">
+                    <div>
+                        <span class="tag">${art.topic || 'Pesquisa Geral'}</span>
+                        ${(art.keywords || []).slice(0, 3).map(kw => `<span class="tag tag-copper" style="font-size:0.68rem; margin-left:0.2rem;">${kw}</span>`).join('')}
+                    </div>
+                    ${art.url ? `<a href="${art.url}" target="_blank" rel="noopener" class="btn btn-sm btn-blue" style="padding:3px 10px; font-size:0.75rem;">Acessar Publicação ↗</a>` : ''}
+                </div>
                 ${affinityHtml}
             </div>`;
     }
@@ -45,7 +76,7 @@ const PageSearch = (() => {
         ).join('');
         return `
             <div class="glass" style="display:flex; align-items:center; gap:1rem; padding:1rem; border-radius:16px; margin-bottom:0.75rem; flex-wrap:wrap;">
-                <div style="width:46px; height:46px; border-radius:50%; background:var(--color-blue); display:flex; align-items:center; justify-content:center; font-size:1.2rem; font-weight:700; color:#fff; overflow:hidden; flex-shrink:0;">
+                <div style="width:52px; height:52px; border-radius:50%; background:var(--color-blue); display:flex; align-items:center; justify-content:center; font-size:1.3rem; font-weight:700; color:#fff; overflow:hidden; flex-shrink:0; cursor:${userObj.photo ? 'pointer' : 'default'}; box-shadow:0 3px 10px rgba(0,0,0,0.15);" ${userObj.photo ? `onclick="PageChat.openPhotoViewer('${userObj.photo.replace(/'/g, "\\'")}','${(userObj.name || '').replace(/'/g, "\\'")}')"` : ''}>
                     ${userObj.photo ? `<img src="${userObj.photo}" alt="" style="width:100%;height:100%;object-fit:cover;">` : initial}
                 </div>
                 <div style="flex:1; min-width:200px;">
@@ -64,7 +95,6 @@ const PageSearch = (() => {
     function render(container, state) {
         const defaultQuery = state.quick_query || state.search_query || '';
         state.quick_query = '';
-        const email = state.current_user;
 
         if (state.logged_in && state.current_user) {
             NebulaStorage.refreshCommunityDirectory(state).then(() => {
@@ -76,16 +106,34 @@ const PageSearch = (() => {
     }
 
     function _renderSearchUI(container, state, defaultQuery) {
-        const historyList = state.search_history || [];
-        const historyChipsHtml = historyList.length ? historyList.slice(0, 8).map(h =>
-            `<button class="btn btn-sm" style="font-size:0.73rem; padding:3px 9px; background:rgba(59,130,246,0.1); border:1px solid rgba(59,130,246,0.3); color:var(--color-blue);" onclick="PageSearch.quickTerm('${(h.query || '').replace(/'/g, "\\'")}')">🕒 ${h.query}</button>`
-        ).join('') : '<span style="font-size:0.75rem; color:var(--text-white-40);">Nenhuma busca recente.</span>';
+        const email = (state.current_user || '').toLowerCase().trim();
+        const storedHistory = getStoredSearchHistory(email);
+        const stateHistory = state.search_history || [];
+        const combinedHistory = [...storedHistory, ...stateHistory];
+        const uniqueHistory = [];
+        const seenQueries = new Set();
+        combinedHistory.forEach(h => {
+            const q = (h.query || '').trim();
+            if (q && !seenQueries.has(q.toLowerCase())) {
+                seenQueries.add(q.toLowerCase());
+                uniqueHistory.push(h);
+            }
+        });
+
+        const historyChipsHtml = uniqueHistory.length ? `
+            <div style="display:flex; gap:0.4rem; flex-wrap:wrap; align-items:center;">
+                ${uniqueHistory.slice(0, 10).map(h =>
+                    `<button class="btn btn-sm" style="font-size:0.73rem; padding:3px 9px; background:rgba(59,130,246,0.1); border:1px solid rgba(59,130,246,0.3); color:var(--color-blue);" onclick="PageSearch.quickTerm('${(h.query || '').replace(/'/g, "\\'")}')">🕒 ${h.query}</button>`
+                ).join('')}
+                <button class="btn btn-sm" style="font-size:0.7rem; padding:2px 8px; color:#ef4444; border-color:rgba(239,68,68,0.3);" onclick="PageSearch.clearHistory()">Limpar</button>
+            </div>
+        ` : '<span style="font-size:0.75rem; color:var(--text-white-40);">Nenhuma busca recente.</span>';
 
         container.innerHTML = `
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem; flex-wrap:wrap; gap:1rem;">
                 <div>
-                    <div class="page-title">Pesquisa Inteligente</div>
-                    <div class="page-sub" style="margin-bottom:0">Busca em artigos acadêmicos globais e pesquisadores do Nebula</div>
+                    <div class="page-title">Pesquisa Inteligente &amp; Qualis CAPES</div>
+                    <div class="page-sub" style="margin-bottom:0">Busca em artigos acadêmicos globais (OpenAlex, SciELO, DOAJ, Semantic Scholar) com classificação Qualis</div>
                 </div>
                 <button class="btn btn-blue" onclick="NebulaApp.renderPage()" style="gap:0.4rem; padding: 0.5rem 1rem;">
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
@@ -95,7 +143,7 @@ const PageSearch = (() => {
 
             <!-- Abas de Pesquisa -->
             <div class="tabs-bar mb-1" style="max-width:400px;">
-                <button class="tab-btn ${searchTab === 'articles' ? 'active' : ''}" id="search-tab-articles">Artigos Acadêmicos</button>
+                <button class="tab-btn ${searchTab === 'articles' ? 'active' : ''}" id="search-tab-articles">Artigos Acadêmicos &amp; Periódicos</button>
                 <button class="tab-btn ${searchTab === 'users' ? 'active' : ''}" id="search-tab-users">Pesquisadores / Usuários</button>
             </div>
 
@@ -113,7 +161,7 @@ const PageSearch = (() => {
 
             <div class="glass mb-1" id="search-form-card">
                 <div class="input-group" style="margin-bottom:0">
-                    <label class="input-label" id="search-input-label">${searchTab === 'users' ? 'Nome, email ou tema de pesquisa do usuário' : 'Termo ou pergunta de pesquisa'}</label>
+                    <label class="input-label" id="search-input-label">${searchTab === 'users' ? 'Nome, email ou tema de pesquisa do usuário' : 'Termo, periódico ou pergunta de pesquisa acadêmica'}</label>
                     <textarea id="search-query" class="textarea" style="min-height:55px;" placeholder="${searchTab === 'users' ? 'Ex: Maria Oliveira, inteligência artificial...' : 'Ex: museologia e patrimônio cultural na América Latina...'}">${defaultQuery}</textarea>
                 </div>
                 <button class="btn btn-primary btn-full mt-1" id="search-btn">Pesquisar</button>
@@ -134,13 +182,24 @@ const PageSearch = (() => {
         });
 
         const searchBtn = document.getElementById('search-btn');
+        const queryInput = document.getElementById('search-query');
+
         if (searchBtn) {
             searchBtn.addEventListener('click', () => {
-                const query = document.getElementById('search-query').value.trim();
+                const query = queryInput.value.trim();
                 if (searchTab === 'users') {
                     performUserSearch(query, state);
                 } else {
                     performSearch(query, null, state);
+                }
+            });
+        }
+
+        if (queryInput) {
+            queryInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    searchBtn.click();
                 }
             });
         }
@@ -235,15 +294,20 @@ const PageSearch = (() => {
         resContainer.innerHTML = html;
     }
 
-    function quickTerm(term) {
-        const input = document.getElementById('search-query');
-        if (input) input.value = term;
-        if (searchTab === 'users') {
-            performUserSearch(term, NebulaApp.getState());
-        } else {
-            performSearch(term, null, NebulaApp.getState());
+    function clearHistory() {
+        const state = NebulaApp.getState();
+        const email = (state.current_user || '').toLowerCase().trim();
+        state.search_history = [];
+        try {
+            localStorage.removeItem('nebula_search_history_v3_' + email);
+            localStorage.removeItem('nebula_search_history_v2_' + email);
+        } catch {}
+        if (state.workspaces && state.workspaces[email]) {
+            state.workspaces[email].search_history = [];
         }
+        NebulaStorage.saveState(state);
+        render(document.getElementById('pageContainer'), state);
     }
 
-    return { render, quickTerm };
+    return { render, quickTerm, clearHistory };
 })();

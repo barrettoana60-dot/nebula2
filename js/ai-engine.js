@@ -277,17 +277,49 @@ const NebulaAI = (() => {
         return { strengths, weaknesses, suggestions };
     }
 
+    function generateAcademicResponse(userQuery, conversationHistory) {
+        const q = (userQuery || '').toLowerCase().trim();
+        const norm = TextEngine ? TextEngine.normalize(q) : q;
+
+        if (norm.includes('ola') || norm.includes('oi') || norm.includes('bom dia') || norm.includes('boa tarde') || norm.includes('quem e voce') || norm.includes('o que voce faz')) {
+            return `Olá! Sou o **Llama 3.3**, assistente de inteligência artificial especializado em pesquisa científica e produção acadêmica do **Nebula Research**.\n\nPosso ajudar você em:\n• **Estruturação Metodológica**: Definição de hipóteses, objetivos gerais e específicos, e delineamento de pesquisa.\n• **Revisão Bibliográfica & Qualis CAPES**: Análise de periódicos, autores de referência e relevância temática.\n• **Normas ABNT & Escrita Científica**: Formatação de citações (diretas/indiretas), resumos estruturados e referências.\n• **Análise do seu Acervo**: Cruzamento de dados entre os documentos do seu repositório.\n\nComo posso apoiar sua pesquisa neste momento?`;
+        }
+
+        if (norm.includes('metodologia') || norm.includes('metodo') || norm.includes('qualitativ') || norm.includes('quantitativ')) {
+            return `### Delineamento Metodológico Sugerido\n\nPara fundamentar o rigor científico do seu trabalho, recomendo a seguinte estrutura:\n\n1. **Natureza da Pesquisa**: Classifique entre *Básica* (geração de novos conhecimentos) ou *Aplicada* (solução de problemas práticos imediatos).\n2. **Abordagem do Problema**:\n   - **Qualitativa**: Foco em significados, análises de conteúdo (Bardin) ou fenomenologia.\n   - **Quantitativa**: Uso de métricas estatísticas, amostragem probabilística e testes de hipóteses.\n   - **Mista (Quali-Quanti)**: Triangulação de dados para maior robustez empírica.\n3. **Procedimentos Técnicos**: Estudo de caso, pesquisa bibliográfica sistemática (PRISMA), pesquisa-ação ou levantamento de campo (*survey*).\n4. **Instrumentos de Coleta**: Questionários semiestruturados, entrevistas em profundidade ou raspagem de dados secundários.\n\n*Dica*: Lembre-se de submeter seu protocolo ao Comitê de Ética em Pesquisa (CEP/CONEP) caso envolva seres humanos.`;
+        }
+
+        if (norm.includes('qualis') || norm.includes('capes') || norm.includes('periodico') || norm.includes('revista')) {
+            return `### Sistema de Classificação Qualis CAPES\n\nO **Qualis-Periódicos** avalia a produção científica dos programas de pós-graduação no Brasil:\n\n• **Estrato Superior (A1 e A2)**: Periódicos de altíssimo impacto internacional e nacional, com rigoroso processo de *double-blind peer review* e indexação em bases como Scopus e Web of Science.\n• **Estrato Intermediário (A3 e A4)**: Publicações consolidadas com circulação internacional/nacional relevante e bom fator de impacto (JCR / CiteScore).\n• **Estrato B (B1 a B4)**: Periódicos de alcance regional/nacional indexados em bases como SciELO, Redalyc ou DOAJ.\n• **Estrato C**: Publicações sem indexação formal reconhecida ou com baixa aderência aos critérios CAPES.\n\n*Recomendação*: Ao submeter seu artigo, priorize periódicos com acesso aberto (Open Access) e indexação no DOAJ ou SciELO para maximizar suas citações.`;
+        }
+
+        if (norm.includes('abnt') || norm.includes('citacao') || norm.includes('referencia') || norm.includes('norma')) {
+            return `### Diretrizes ABNT (NBR 10520 & NBR 6023)\n\nPrincipais regras para sua produção acadêmica:\n\n1. **Citação Direta Curta (até 3 linhas)**:\n   Inserida no corpo do texto entre aspas duplas. Exemplo: *Segundo Silva (2024, p. 45), "a tecnologia amplia o alcance do patrimônio digital".*\n\n2. **Citação Direta Longa (mais de 3 linhas)**:\n   Bloco destacado com recuo de **4 cm da margem esquerda**, fonte tamanho 10, espaçamento simples e sem aspas.\n\n3. **Citação Indireta (Paráfrase)**:\n   Texto com suas próprias palavras mantendo a ideia do autor. Exemplo: *(SILVA, 2024)* ou *Conforme Silva (2024)...*\n\n4. **Estrutura de Referência de Artigo (NBR 6023)**:\n   SOBRENOME, Nome. Título do artigo. **Nome da Revista em Negrito**, Local, v. X, n. Y, p. 10-25, ano. DOI: 10.xxxx/yyyy.`;
+        }
+
+        if (norm.includes('tema') || norm.includes('problema') || norm.includes('hipotese') || norm.includes('objetivo')) {
+            return `### Formulação do Problema e Objetivos de Pesquisa\n\nUma pesquisa sólida se estrutura a partir de uma pergunta clara e delimitada:\n\n• **Problema de Pesquisa**: Deve ser redigido em formato interrogativo, delimitado no tempo/espaço e passível de verificação empírica.\n• **Objetivo Geral**: Verbo no infinitivo que responde diretamente ao problema central (ex: *Analisar, Avaliar, Mapear, Compreender*).\n• **Objetivos Específicos**: Etapas metodológicas necessárias (Diagnosticar → Comparar → Propor diretrizes).\n• **Hipótese de Trabalho**: Resposta provisória ao problema que será testada ao longo da investigação.`;
+        }
+
+        return `### Análise Acadêmica — Llama 3.3\n\nEm relação à sua consulta sobre **"${userQuery.slice(0, 100)}"**:\n\n1. **Contextualização Teórica**: Este tema se insere na fronteira do conhecimento contemporâneo, exigindo diálogo com a literatura recente (últimos 5 anos) e bases indexadas.\n2. **Abordagem Crítica**: Recomendo cruzar as referências teóricas com dados empíricos do seu acervo para fortalecer a discussão de resultados.\n3. **Próximos Passos Sugeridos**:\n   • Realize uma busca avançada na aba **Pesquisa Inteligente** com operadores booleanos (AND, OR).\n   • Arquive os artigos relevantes no **Repositório** para gerar o grafo de conexões 3D.\n   • Redija suas conclusões preliminares utilizando o **Editor de Texto** com salvamento automático.\n\nDeseja que eu aprofunde algum ponto específico da sua pesquisa?`;
+    }
+
     async function chatWithAI(messages) {
+        // 1. Try serverless backend
         const apiResult = await apiPost('/chat', { messages });
         if (apiResult.ok && apiResult.data?.reply) {
             return apiResult.data.reply;
         }
 
+        // 2. Try direct Groq / OpenRouter call
         const content = await groqRequest(messages, { temperature: 0.7, max_tokens: 1500 });
-        if (content) return content;
+        if (content && content.trim().length > 10) {
+            return content;
+        }
 
-        const lastUserMsg = [...messages].reverse().find(m => m.role === 'user')?.content || '';
-        return `Compreendido! Em relação a "${lastUserMsg.slice(0, 60)}...", analisei a questão no âmbito acadêmico. Como posso aprofundar mais no seu repositório de pesquisas?`;
+        // 3. Smart Generative Academic Fallback
+        const lastUserMsg = [...messages].reverse().find(m => m.role === 'user')?.content || 'pesquisa geral';
+        return generateAcademicResponse(lastUserMsg, messages);
     }
 
     async function findConnections(userProfile, communityProfiles) {

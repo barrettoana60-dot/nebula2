@@ -231,19 +231,47 @@ const SearchEngine = (() => {
         return words.filter(Boolean).join(' ').slice(0, 450);
     }
 
+    function computeQualisCapes(source, citations, url, title) {
+        const src = (source || '').toLowerCase();
+        const c = parseInt(citations) || 0;
+        
+        // High impact journals / Top tier
+        if (src.includes('nature') || src.includes('science') || src.includes('ieee') || src.includes('acm') || src.includes('lancet') || src.includes('cell') || c >= 50) {
+            return { grade: 'A1', color: '#10b981', label: 'Qualis A1 (Alto Impacto Internacional)' };
+        }
+        if (src.includes('springer') || src.includes('elsevier') || src.includes('wiley') || src.includes('oxford') || src.includes('cambridge') || c >= 25) {
+            return { grade: 'A2', color: '#059669', label: 'Qualis A2 (Impacto Internacional)' };
+        }
+        if (src.includes('scielo') || src.includes('frontiers') || src.includes('mdpi') || src.includes('plos') || c >= 12) {
+            return { grade: 'A3', color: '#3b82f6', label: 'Qualis A3 (Excelente Circulação)' };
+        }
+        if (src.includes('doaj') || src.includes('redalyc') || src.includes('revista') || c >= 6) {
+            return { grade: 'A4', color: '#6366f1', label: 'Qualis A4 (Relevância Nacional/Int.)' };
+        }
+        if (c >= 2 || (url && url.includes('doi.org'))) {
+            return { grade: 'B1', color: '#f59e0b', label: 'Qualis B1 (Periódico Indexado)' };
+        }
+        return { grade: 'B2', color: '#8b5cf6', label: 'Qualis B2 (Produção Acadêmica)' };
+    }
+
     function mapArticle(base) {
         const kwText = `${base.title || ''} ${base.abstract || ''}`;
+        const qualisInfo = computeQualisCapes(base.source, base.citations, base.url, base.title);
         return {
             title: base.title || 'Sem título',
             authors: base.authors || 'Não informado',
             year: base.year || '?',
             abstract: (base.abstract || '').slice(0, 400),
-            source: base.source || 'Acadêmico',
+            source: base.source || 'Periódico Acadêmico',
+            journal: base.source || 'Periódico Acadêmico',
             citations: base.citations || 0,
             url: base.url || '',
             keywords: TextEngine.extractKeywordsTFIDF(kwText, 8),
             topic: TextEngine.detectTopic(kwText),
-            provider: base.provider || base.source
+            provider: base.provider || base.source,
+            qualis: qualisInfo.grade,
+            qualisLabel: qualisInfo.label,
+            qualisColor: qualisInfo.color
         };
     }
 

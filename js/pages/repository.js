@@ -177,9 +177,24 @@ const PageRepository = (() => {
                             <input type="text" class="input" id="rev-year" value="${doc.year || ''}">
                         </div>
                     </div>
-                    <div class="input-group">
-                        <label class="input-label">Tópico principal</label>
-                        <input type="text" class="input" id="rev-topic" value="${doc.topic || ''}">
+                    <div class="grid-50-50" style="gap:1rem;">
+                        <div class="input-group">
+                            <label class="input-label">Tipo de Documento</label>
+                            <select class="select" id="rev-doc-type" style="height:38px;">
+                                <option value="Artigo Periódico" ${(doc.document_type === 'Artigo Periódico' || !doc.document_type) ? 'selected' : ''}>Artigo Periódico</option>
+                                <option value="Tese de Doutorado" ${doc.document_type === 'Tese de Doutorado' ? 'selected' : ''}>Tese de Doutorado</option>
+                                <option value="Dissertação de Mestrado" ${doc.document_type === 'Dissertação de Mestrado' ? 'selected' : ''}>Dissertação de Mestrado</option>
+                                <option value="Monografia / TCC" ${doc.document_type === 'Monografia / TCC' ? 'selected' : ''}>Monografia / TCC</option>
+                                <option value="Trabalho em Congresso" ${doc.document_type === 'Trabalho em Congresso' ? 'selected' : ''}>Trabalho em Congresso</option>
+                                <option value="Livro / Capítulo" ${doc.document_type === 'Livro / Capítulo' ? 'selected' : ''}>Livro / Capítulo</option>
+                                <option value="Relatório Técnico" ${doc.document_type === 'Relatório Técnico' ? 'selected' : ''}>Relatório Técnico</option>
+                                <option value="Projeto de Pesquisa" ${doc.document_type === 'Projeto de Pesquisa' ? 'selected' : ''}>Projeto de Pesquisa</option>
+                            </select>
+                        </div>
+                        <div class="input-group">
+                            <label class="input-label">Tópico principal</label>
+                            <input type="text" class="input" id="rev-topic" value="${doc.topic || ''}">
+                        </div>
                     </div>
                     <div class="input-group">
                         <label class="input-label">Palavras-chave (separadas por vírgula)</label>
@@ -199,6 +214,7 @@ const PageRepository = (() => {
                     doc.name = document.getElementById('rev-name').value;
                     doc.author = document.getElementById('rev-author').value;
                     doc.year = document.getElementById('rev-year').value;
+                    doc.document_type = document.getElementById('rev-doc-type').value;
                     doc.topic = document.getElementById('rev-topic').value;
                     doc.keywords = document.getElementById('rev-keywords').value.split(',').map(s => s.trim()).filter(s => s);
                     doc.summary = document.getElementById('rev-summary').value;
@@ -975,15 +991,17 @@ const PageRepository = (() => {
                             </div>
                         </div>
 
-                        <!-- PAGINATION FOOTER -->
-                        <div style="display:flex; justify-content:space-between; align-items:center; padding:0.8rem 2rem; border-top:1px solid rgba(0,0,0,0.08); background:rgba(218,200,179,0.6); gap:1rem; flex-wrap:wrap;">
-                            <button id="reader-prev-btn" style="padding:0.55rem 1.1rem; background:rgba(218,200,179,0.5); border:1px solid rgba(0,0,0,0.12); border-radius:10px; color:var(--text-white); cursor:pointer; font-weight:500; transition:all 0.18s;">◀ Anterior</button>
-                            <div style="display:flex; align-items:center; gap:0.6rem;">
-                                <span id="reader-page-indicator" style="font-size:0.9rem; font-weight:600; color:var(--text-white-80);">Página 1 de 1</span>
-                                <span style="color:var(--text-white-60); font-size:0.85rem;">| Ir para:</span>
-                                <input id="reader-page-jump" type="number" min="1" style="width:60px; background:rgba(218,200,179,0.4); border:1px solid rgba(0,0,0,0.12); border-radius:7px; color:var(--text-white); padding:0.3rem 0.5rem; font-size:0.85rem; text-align:center; outline:none;" placeholder="#">
+                        <!-- CONTROLS FOOTER -->
+                        <div style="display:flex; justify-content:space-between; align-items:center; padding:0.8rem 2rem; border-top:1px solid rgba(0,0,0,0.08); background:rgba(218,200,179,0.7); gap:1rem; flex-wrap:wrap;">
+                            <div style="display:flex; align-items:center; gap:0.5rem;">
+                                <span class="tag tag-copper" style="font-size:0.75rem; font-weight:700;">📜 Rolamento Contínuo Ativo</span>
+                                <span id="reader-page-indicator" style="font-size:0.85rem; font-weight:600; color:var(--text-white-80);">${doc.pages.length} páginas</span>
                             </div>
-                            <button id="reader-next-btn" style="padding:0.55rem 1.1rem; background:rgba(218,200,179,0.5); border:1px solid rgba(0,0,0,0.12); border-radius:10px; color:var(--text-white); cursor:pointer; font-weight:500; transition:all 0.18s;">Próxima ▶</button>
+                            <div style="display:flex; align-items:center; gap:0.6rem;">
+                                <button class="btn btn-sm" onclick="navigator.clipboard.writeText('${(doc.author||'AUTOR').toUpperCase()}, ${(doc.author||'Nome')}. ${(doc.name||'Título')}. ${(doc.topic||'Área')}, ${doc.year||'2024'}.'); alert('Citação ABNT copiada para a área de transferência!');" style="font-size:0.75rem;">📋 Copiar Citação ABNT</button>
+                                <span style="color:var(--text-white-60); font-size:0.8rem;">Ir p/ página:</span>
+                                <input id="reader-page-jump" type="number" min="1" max="${doc.pages.length}" style="width:55px; background:rgba(255,255,255,0.5); border:1px solid rgba(0,0,0,0.15); border-radius:7px; color:var(--text-white); padding:0.25rem 0.4rem; font-size:0.82rem; text-align:center; outline:none;" placeholder="#">
+                            </div>
                         </div>
                     </div>
                 </div>

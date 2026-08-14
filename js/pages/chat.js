@@ -195,14 +195,15 @@ const PageChat = (() => {
         overlay.id = 'nebula-photo-lightbox';
         overlay.className = 'photo-lightbox';
         overlay.innerHTML = `
-            <div class="photo-lightbox-backdrop" onclick="this.parentElement.remove()"></div>
+            <div class="photo-lightbox-backdrop" onclick="document.getElementById('nebula-photo-lightbox')?.remove()"></div>
             <div class="photo-lightbox-content">
                 <button type="button" class="photo-lightbox-close" onclick="document.getElementById('nebula-photo-lightbox')?.remove()">✕</button>
                 ${title ? `<div class="photo-lightbox-title">${title}</div>` : ''}
-                <img src="${url}" alt="${title || 'Foto'}" class="photo-lightbox-img">
+                <img src="${url}" alt="${title || 'Foto'}" class="photo-lightbox-img" style="max-height:80vh; max-width:90vw; object-fit:contain; border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.6);">
             </div>`;
         document.body.appendChild(overlay);
     }
+    window.openPhotoViewer = openPhotoViewer;
 
     function getPeerPhoto(peerEmail) {
         return NebulaStorage.getUserPhoto(state, peerEmail);
