@@ -222,12 +222,12 @@ const PageChat = (() => {
 
     function renderStatusDots(status) {
         if (status === 'read') {
-            return `<span class="msg-status msg-status-read" title="Visualizado"><span class="msg-dot read"></span><span class="msg-dot read"></span></span>`;
+            return `<span class="msg-status msg-status-read" title="Visto"><span class="msg-dot read"></span><span class="msg-dot read"></span></span>`;
         }
         if (status === 'delivered') {
-            return `<span class="msg-status msg-status-delivered" title="Entregue"><span class="msg-dot delivered"></span><span class="msg-dot delivered"></span></span>`;
+            return `<span class="msg-status msg-status-delivered" title="Entregue"><span class="msg-dot delivered"></span></span>`;
         }
-        return `<span class="msg-status msg-status-sent" title="Enviado"><span class="msg-dot"></span></span>`;
+        return `<span class="msg-status msg-status-sent" title="Enviado"><span class="msg-dot sent"></span><span class="msg-dot sent"></span></span>`;
     }
 
     function getStatusLabel(room) {
@@ -643,12 +643,17 @@ const PageChat = (() => {
         const btn = document.getElementById('chat-send-btn');
         const chatDraft = document.getElementById('chat-draft');
 
-        chatDraft.addEventListener('input', () => {
+        const triggerTyping = () => {
             const room = rooms[activeRoomIdx];
             if (room && room.kind === 'direct') {
                 NebulaStorage.setTypingIndicator(room.id, emailClean);
             }
-        });
+        };
+
+        chatDraft.addEventListener('input', triggerTyping);
+        chatDraft.addEventListener('keydown', triggerTyping);
+        chatDraft.addEventListener('keyup', triggerTyping);
+        chatDraft.addEventListener('focus', triggerTyping);
 
         btn.addEventListener('click', async () => {
             if (_sendLock) return;

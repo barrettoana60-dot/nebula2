@@ -1077,10 +1077,20 @@ const NebulaStorage = (() => {
             localStorage.setItem(key, now.toString());
             const raw = localStorage.getItem('nebula_presence_local');
             const map = raw ? JSON.parse(raw) : {};
-            map[clean] = { ...(map[clean] || {}), timestamp: now, typing_room: roomId, typing_until: now + 4000 };
+            map[clean] = { ...(map[clean] || {}), timestamp: now, typing_room: roomId, typing_until: now + 6000 };
             localStorage.setItem('nebula_presence_local', JSON.stringify(map));
-            localStorage.setItem('nebula_typing_broadcast', JSON.stringify({ roomId, email: clean, until: now + 4000, ts: now }));
+            localStorage.setItem('nebula_typing_broadcast', JSON.stringify({ roomId, email: clean, until: now + 6000, ts: now }));
         } catch (e) {}
+
+        if (_realtimePresenceChannel) {
+            try {
+                _realtimePresenceChannel.send({
+                    type: 'broadcast',
+                    event: 'typing',
+                    payload: { roomId, email: clean, until: now + 6000, ts: now }
+                });
+            } catch (e) {}
+        }
         pulsePresence(email, roomId).catch(() => {});
     }
 
@@ -1301,15 +1311,25 @@ const NebulaStorage = (() => {
 
     function getTypingPeers(roomId, myEmail) {
         const cleanMine = (myEmail || '').toLowerCase().trim();
+        const now = Date.now();
         const peers = [];
         try {
+            const raw = localStorage.getItem('nebula_presence_local');
+            if (raw) {
+                const map = JSON.parse(raw);
+                Object.entries(map).forEach(([em, data]) => {
+                    if (em !== cleanMine && data.typing_room === roomId && (data.typing_until || 0) > now) {
+                        if (!peers.includes(em)) peers.push(em);
+                    }
+                });
+            }
             for (let i = 0; i < localStorage.length; i++) {
                 const k = localStorage.key(i);
                 if (!k || !k.startsWith(`nebula_typing_${roomId}_`)) continue;
                 const peerEmail = k.replace(`nebula_typing_${roomId}_`, '');
                 if (peerEmail === cleanMine) continue;
                 const ts = parseInt(localStorage.getItem(k) || '0');
-                if (Date.now() - ts < 4000) peers.push(peerEmail);
+                if (now - ts < 6000 && !peers.includes(peerEmail)) peers.push(peerEmail);
             }
         } catch (e) {}
         return peers;
