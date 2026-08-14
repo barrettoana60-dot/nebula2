@@ -373,13 +373,12 @@ const PageChat = (() => {
             return;
         }
 
-        const draft = document.getElementById('chat-draft');
-        if (draft && draft.value.trim().length > 0) {
-            statusEl.innerHTML = `<div style="display:flex;align-items:center;gap:0.4rem;color:var(--text-white-60);font-size:0.82rem;"><span class="chat-typing-dot" style="background:var(--color-blue);"></span><span class="chat-typing-dot" style="background:var(--color-blue);"></span><span class="chat-typing-dot" style="background:var(--color-blue);"></span> Você está digitando...</div>`;
-            return;
-        }
-
         statusEl.innerHTML = '';
+    }
+
+    function getActivePeer() {
+        const room = rooms[activeRoomIdx];
+        return room ? room.peer : null;
     }
 
     function selectRoom(i) {
@@ -815,5 +814,5 @@ const PageChat = (() => {
         });
     }
 
-    return { render, selectRoom, selectPeer, buildRoomId, getStoredMessages, saveStoredMessages, openChatWithTarget, startChatWith, openPhotoViewer, loadMessages, renderRoomsList };
+    return { render, selectRoom, selectPeer, buildRoomId, getStoredMessages, saveStoredMessages, openChatWithTarget, startChatWith, openPhotoViewer, loadMessages, renderRoomsList, getActivePeer };
 })();

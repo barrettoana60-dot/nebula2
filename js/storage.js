@@ -1138,11 +1138,14 @@ const NebulaStorage = (() => {
                         try {
                             const raw = localStorage.getItem('nebula_presence_local');
                             const map = raw ? JSON.parse(raw) : {};
-                            map[sender] = { ...(map[sender] || {}), timestamp: now, typing_room: payload.roomId, typing_until: now + 4000 };
+                            map[sender] = { ...(map[sender] || {}), timestamp: now, typing_room: payload.roomId, typing_until: now + 6000 };
                             localStorage.setItem('nebula_presence_local', JSON.stringify(map));
                             localStorage.setItem(`nebula_typing_${payload.roomId}_${sender}`, now.toString());
                             localStorage.setItem('nebula_typing_broadcast', JSON.stringify({ roomId: payload.roomId, email: sender, ts: now }));
                         } catch (e) {}
+                        if (typeof PageChat !== 'undefined' && typeof PageChat.loadMessages === 'function') {
+                            PageChat.loadMessages();
+                        }
                     }
                 })
                 .on('broadcast', { event: 'new_msg' }, () => {

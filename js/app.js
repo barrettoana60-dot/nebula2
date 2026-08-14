@@ -254,24 +254,61 @@ const NebulaApp = (() => {
 
     // ── Bell Notification System ──
 
+    function clearAllNotifications() {
+        if (!state.current_user) return;
+        const emailClean = state.current_user.toLowerCase().trim();
+        localStorage.setItem('nebula_bell_seen_' + emailClean, Date.now().toString());
+        _cachedNotifications = [];
+        const badge = document.getElementById('navUnreadBadge');
+        const mobileBadge = document.getElementById('mobileUnreadBadge');
+        if (badge) badge.style.display = 'none';
+        if (mobileBadge) mobileBadge.style.display = 'none';
+        openBellDropdown();
+    }
+
+    function toggleDoNotDisturb() {
+        if (!state.current_user) return;
+        const emailClean = state.current_user.toLowerCase().trim();
+        const current = localStorage.getItem('nebula_dnd_' + emailClean) === 'true';
+        localStorage.setItem('nebula_dnd_' + emailClean, (!current).toString());
+        updateBell();
+        openBellDropdown();
+    }
+
     async function updateBell() {
         if (!state.current_user) return;
         const emailClean = state.current_user.toLowerCase().trim();
+        const badge = document.getElementById('navUnreadBadge');
+        const mobileBadge = document.getElementById('mobileUnreadBadge');
+
+        const isDnd = localStorage.getItem('nebula_dnd_' + emailClean) === 'true';
+        if (isDnd) {
+            _cachedNotifications = [];
+            if (badge) badge.style.display = 'none';
+            if (mobileBadge) mobileBadge.style.display = 'none';
+            return;
+        }
+
         try {
             const lastSeen = parseInt(localStorage.getItem('nebula_bell_seen_' + emailClean) || '0');
             let unread = [];
 
-            // 1. Cache local v3 — aceita recipient_email direto OU room_id que bate (fallback)
+            // Se o usuario esta com a pagina de Mensagens aberta em um contato especifico:
+            let activePeer = null;
+            if ((state.page === 'Comunidade' || state.page === 'Mensagens') && typeof PageChat !== 'undefined' && typeof PageChat.getActivePeer === 'function') {
+                activePeer = (PageChat.getActivePeer() || '').toLowerCase().trim();
+            }
+
+            // 1. Cache local v3
             try {
                 const localStore = JSON.parse(localStorage.getItem('nebula_chat_store_v3_' + emailClean) || '[]');
                 const localUnread = localStore.filter(m => {
                     const sender = (m.sender_email || '').toLowerCase().trim();
                     const recipient = (m.recipient_email || '').toLowerCase().trim();
                     if (!sender || sender === emailClean || sender === 'ai@nebula' || sender === 'ai') return false;
+                    if (activePeer && sender === activePeer) return false;
                     if ((m.timestamp || 0) <= lastSeen) return false;
-                    // Se recipient_email está preenchido, usa ele
                     if (recipient) return recipient === emailClean;
-                    // Fallback: verifica pelo room_id
                     if (m.room_id) {
                         return NebulaStorage.buildDirectRoomId(emailClean, sender) === m.room_id;
                     }
@@ -283,15 +320,17 @@ const NebulaApp = (() => {
             // 2. Mensagens não lidas no Supabase
             try {
                 const sbUnread = await NebulaStorage.fetchUnreadMessagesFromSupabase(emailClean, lastSeen);
-                unread.push(...sbUnread);
+                const filteredSb = sbUnread.filter(m => {
+                    const sender = (m.sender_email || '').toLowerCase().trim();
+                    return !(activePeer && sender === activePeer);
+                });
+                unread.push(...filteredSb);
             } catch (e) {}
 
             // Deduplica notificações
             const finalUnread = NebulaStorage.mergeMessagesUnique([], unread);
             _cachedNotifications = finalUnread;
 
-            const badge = document.getElementById('navUnreadBadge');
-            const mobileBadge = document.getElementById('mobileUnreadBadge');
             [badge, mobileBadge].forEach(b => {
                 if (!b) return;
                 if (finalUnread.length > 0) {
@@ -319,26 +358,47 @@ const NebulaApp = (() => {
         let dropdown = document.getElementById('bellDropdown');
         if (!dropdown) return;
 
+        const emailClean = (state.current_user || '').toLowerCase().trim();
+        const isDnd = localStorage.getItem('nebula_dnd_' + emailClean) === 'true';
         const notifs = _cachedNotifications;
-        if (!notifs.length) {
-            dropdown.innerHTML = `
-                <div style="padding:1.2rem;text-align:center;color:var(--text-white-60);font-size:0.9rem;">
+
+        let headerHtml = `
+            <div style="padding:0.75rem 1rem; border-bottom:1px solid rgba(0,0,0,0.06); display:flex; justify-content:space-between; align-items:center; gap:0.5rem;">
+                <span style="font-size:0.75rem; color:var(--text-white-60); font-weight:700; letter-spacing:0.05em;">NOTIFICAÇÕES</span>
+                <div style="display:flex; align-items:center; gap:0.4rem;">
+                    <button onclick="NebulaApp.toggleDoNotDisturb()" style="background:${isDnd ? 'rgba(239,68,68,0.2)' : 'rgba(0,0,0,0.05)'}; color:${isDnd ? '#ef4444' : 'var(--text-white-80)'}; border:${isDnd ? '1px solid #ef4444' : '1px solid transparent'}; border-radius:6px; font-size:0.72rem; padding:0.25rem 0.5rem; cursor:pointer; font-weight:600;" title="Silenciar notificações">
+                        ${isDnd ? 'Não perturbe: ATIVO' : 'Não perturbe'}
+                    </button>
+                    ${notifs.length > 0 ? `
+                        <button onclick="NebulaApp.clearAllNotifications()" style="background:none; border:none; color:var(--color-blue); font-size:0.72rem; cursor:pointer; font-weight:600; padding:0.25rem 0.4rem;">
+                            Limpar
+                        </button>` : ''}
+                </div>
+            </div>`;
+
+        if (isDnd) {
+            dropdown.innerHTML = headerHtml + `
+                <div style="padding:1.2rem; text-align:center; color:var(--text-white-60); font-size:0.88rem;">
+                    Modo Não Perturbe ativado.<br><span style="font-size:0.78rem;">Notificações silenciadas.</span>
+                </div>`;
+        } else if (!notifs.length) {
+            dropdown.innerHTML = headerHtml + `
+                <div style="padding:1.2rem; text-align:center; color:var(--text-white-60); font-size:0.88rem;">
                     Nenhuma mensagem nova
                 </div>`;
         } else {
-            dropdown.innerHTML = `
-                <div style="padding:0.8rem 1rem;border-bottom:1px solid rgba(0,0,0,0.06);font-size:0.75rem;color:var(--text-white-60);font-weight:600;letter-spacing:0.05em;">
-                    MENSAGENS NÃO LIDAS
+            dropdown.innerHTML = headerHtml + `
+                <div style="max-height:280px; overflow-y:auto;">
+                    ${notifs.slice(0, 10).map(m => `
+                        <div onclick="NebulaApp.goToChat('${m.sender_email}')" style="padding:0.85rem 1rem; border-bottom:1px solid rgba(0,0,0,0.05); cursor:pointer; transition:background 0.2s;" 
+                             onmouseover="this.style.background='rgba(0,0,0,0.03)'" onmouseout="this.style.background='transparent'">
+                            <div style="font-weight:700; font-size:0.88rem; margin-bottom:0.2rem;">${m.sender_name || m.sender_email}</div>
+                            <div style="color:var(--text-white-60); font-size:0.82rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${(m.text || '').slice(0, 55)}${(m.text || '').length > 55 ? '...' : ''}</div>
+                            <div style="color:var(--color-blue); font-size:0.72rem; margin-top:0.2rem;">${m.created_at ? new Date(m.created_at).toLocaleString('pt-BR', {hour:'2-digit',minute:'2-digit',day:'2-digit',month:'2-digit'}) : ''}</div>
+                        </div>
+                    `).join('')}
                 </div>
-                ${notifs.slice(0, 8).map(m => `
-                    <div onclick="NebulaApp.goToChat('${m.sender_email}')" style="padding:0.9rem 1rem;border-bottom:1px solid rgba(0,0,0,0.05);cursor:pointer;transition:background 0.2s;" 
-                         onmouseover="this.style.background='rgba(0,0,0,0.03)'" onmouseout="this.style.background='transparent'">
-                        <div style="font-weight:600;font-size:0.88rem;margin-bottom:0.25rem;">${m.sender_name || m.sender_email}</div>
-                        <div style="color:var(--text-white-60);font-size:0.82rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${(m.text || '').slice(0, 55)}${(m.text || '').length > 55 ? '...' : ''}</div>
-                        <div style="color:var(--color-blue);font-size:0.75rem;margin-top:0.2rem;">${m.created_at ? new Date(m.created_at).toLocaleString('pt-BR', {hour:'2-digit',minute:'2-digit',day:'2-digit',month:'2-digit'}) : ''}</div>
-                    </div>
-                `).join('')}
-                <div onclick="NebulaApp.navigate('Mensagens')" style="padding:0.8rem 1rem;text-align:center;cursor:pointer;color:var(--color-blue);font-size:0.85rem;font-weight:600;"
+                <div onclick="NebulaApp.navigate('Mensagens')" style="padding:0.75rem 1rem; text-align:center; cursor:pointer; color:var(--color-blue); font-size:0.82rem; font-weight:600; border-top:1px solid rgba(0,0,0,0.04);"
                      onmouseover="this.style.background='rgba(0,0,0,0.02)'" onmouseout="this.style.background='transparent'">
                     Ver todas as conversas →
                 </div>`;
@@ -683,7 +743,7 @@ const NebulaApp = (() => {
         renderApp();
     }
 
-    return { init, renderApp, renderPage, navigate, logout, quickSearch, recommendTerms, getState, updateBell, startBellPoll, toggleBellDropdown, goToChat, populateAccountDropdown, toggleAccountDropdown, closeAccountDropdown, switchActiveAccount, addNewAccountFromNavbar, toggleMobileMoreSheet, closeMobileMoreSheet, syncLayoutMode, renderMobileNav, renderMobileHeader };
+    return { init, renderApp, renderPage, navigate, logout, quickSearch, recommendTerms, getState, updateBell, startBellPoll, toggleBellDropdown, goToChat, populateAccountDropdown, toggleAccountDropdown, closeAccountDropdown, switchActiveAccount, addNewAccountFromNavbar, toggleMobileMoreSheet, closeMobileMoreSheet, syncLayoutMode, renderMobileNav, renderMobileHeader, clearAllNotifications, toggleDoNotDisturb };
 })();
 
 // Boot
