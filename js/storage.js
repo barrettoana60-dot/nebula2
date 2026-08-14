@@ -1297,7 +1297,12 @@ const NebulaStorage = (() => {
 
         const msgTs = msg.timestamp || (msg.created_at ? new Date(msg.created_at).getTime() : 0);
 
-        // 1. Visto (dois pontinhos verdes) - leitura gravada em sala
+        // 1. Visto (dois pontinhos verdes)
+        // Se o destinatario esta online ou visualizou a sala
+        if (isUserOnline(presenceList, peer, null)) {
+            return 'read';
+        }
+
         try {
             const roomReadTs = parseInt(localStorage.getItem('nebula_room_read_' + roomId + '_' + peer) || '0');
             if (roomReadTs && roomReadTs >= msgTs) return 'read';
@@ -1330,18 +1335,23 @@ const NebulaStorage = (() => {
             if (raw) {
                 const map = JSON.parse(raw);
                 Object.entries(map).forEach(([em, data]) => {
-                    if (em !== cleanMine && data.typing_room === roomId && (data.typing_until || 0) > now) {
-                        if (!peers.includes(em)) peers.push(em);
+                    const cleanEm = (em || '').toLowerCase().trim();
+                    if (cleanEm !== cleanMine && (data.typing_until || 0) > now) {
+                        if (!peers.includes(cleanEm)) peers.push(cleanEm);
                     }
                 });
             }
             for (let i = 0; i < localStorage.length; i++) {
                 const k = localStorage.key(i);
-                if (!k || !k.startsWith(`nebula_typing_${roomId}_`)) continue;
-                const peerEmail = k.replace(`nebula_typing_${roomId}_`, '');
-                if (peerEmail === cleanMine) continue;
-                const ts = parseInt(localStorage.getItem(k) || '0');
-                if (now - ts < 6000 && !peers.includes(peerEmail)) peers.push(peerEmail);
+                if (!k) continue;
+                if (k.startsWith(`nebula_typing_`)) {
+                    const parts = k.split('_');
+                    const peerEmail = parts[parts.length - 1]?.toLowerCase().trim();
+                    if (peerEmail && peerEmail !== cleanMine) {
+                        const ts = parseInt(localStorage.getItem(k) || '0');
+                        if (now - ts < 6000 && !peers.includes(peerEmail)) peers.push(peerEmail);
+                    }
+                }
             }
         } catch (e) {}
         return peers;

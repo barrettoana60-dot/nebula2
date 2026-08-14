@@ -2040,7 +2040,7 @@ input:disabled + .slider { opacity: 0.5; cursor: not-allowed; }
 }
 .msg-dot.read, .msg-dot.green {
     background: #10b981 !important;
-    box-shadow: 0 0 6px rgba(16,185,129,0.9) !important;
+    box-shadow: 0 0 7px #10b981, 0 0 2px #059669 !important;
 }
 
 @keyframes msg-pop-in {
