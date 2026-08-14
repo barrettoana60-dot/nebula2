@@ -161,7 +161,20 @@ const PageChat = (() => {
         }
     }
 
-    async function getRoomMessages(roomId, myEmail, peerEmail) {
+    let _lastCloudSync = 0;
+    async function syncCloudRoomMessages(roomId, cleanMine, cleanPeer) {
+        if (!roomId || roomId.startsWith('ai::') || cleanPeer === 'ai') return;
+        try {
+            const targetRoomId = buildRoomId(cleanMine, cleanPeer);
+            const cloudMsgs = await NebulaStorage.fetchMessagesFromSupabase(targetRoomId, cleanMine, cleanPeer);
+            if (cloudMsgs && cloudMsgs.length > 0) {
+                saveStoredMessages(NebulaStorage.mergeMessagesUnique(getStoredMessages(), cloudMsgs));
+                loadMessages();
+            }
+        } catch (e) {}
+    }
+
+    function getRoomMessages(roomId, myEmail, peerEmail) {
         const isAi = roomId.startsWith('ai::') || peerEmail === 'ai';
         const cleanMine = (myEmail || '').toLowerCase().trim();
         const cleanPeer = (peerEmail || '').toLowerCase().trim();
@@ -175,26 +188,15 @@ const PageChat = (() => {
                 .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
         }
 
-        // Local messages for this room
         const localRoomMsgs = getStoredMessages().filter(m =>
             messageBelongsToRoom(m, targetRoomId, cleanMine, cleanPeer, false)
         );
-
-        let cloudMsgs = [];
-        try {
-            cloudMsgs = await NebulaStorage.fetchMessagesFromSupabase(targetRoomId, cleanMine, cleanPeer);
-            if (cloudMsgs && cloudMsgs.length > 0) {
-                // Cache any new cloud messages in local store
-                saveStoredMessages(NebulaStorage.mergeMessagesUnique(getStoredMessages(), cloudMsgs));
-            }
-        } catch (e) {}
 
         const pending = _optimisticMsgs.filter(m =>
             messageBelongsToRoom(m, targetRoomId, cleanMine, cleanPeer, false)
         );
 
-        const merged = NebulaStorage.mergeMessagesUnique(localRoomMsgs, cloudMsgs);
-        return NebulaStorage.mergeMessagesUnique(merged, pending)
+        return NebulaStorage.mergeMessagesUnique(localRoomMsgs, pending)
             .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
     }
 
@@ -414,33 +416,37 @@ const PageChat = (() => {
     }
 
     let _lastInboxSync = 0;
-    async function loadMessages() {
+    let _lastPresenceFetch = 0;
+    function loadMessages() {
         const room = rooms[activeRoomIdx];
         if (!room) return;
 
-        const newPresence = await NebulaStorage.fetchOnlinePresence();
-        const presenceChanged = JSON.stringify(newPresence) !== JSON.stringify(_presenceList);
-        _presenceList = newPresence;
+        const now = Date.now();
+        if (now - _lastPresenceFetch > 10000) {
+            _lastPresenceFetch = now;
+            NebulaStorage.fetchOnlinePresence().then(list => {
+                _presenceList = list || [];
+            }).catch(() => {});
+        }
 
         if (room.kind === 'direct') {
             NebulaStorage.markRoomMessagesRead(state, emailClean, room.peer, room.id);
-            NebulaStorage.pulsePresence(emailClean, null, room.id);
 
-            // Sincronia de inbox a cada 6s para garantir mensagens recebidas
-            const now = Date.now();
-            if (now - _lastInboxSync > 6000) {
+            // Sincronia de inbox a cada 8s para garantir mensagens recebidas
+            if (now - _lastInboxSync > 8000) {
                 _lastInboxSync = now;
                 NebulaStorage.syncInboxFromSupabase(state, emailClean).catch(() => {});
+                syncCloudRoomMessages(room.id, emailClean, room.peer);
             }
         }
 
-        const msgs = await getRoomMessages(room.id, email, room.peer);
+        const msgs = getRoomMessages(room.id, email, room.peer);
         const msgContainer = document.getElementById('chat-messages-container');
         if (!msgContainer) return;
 
         const remoteTyping = room.kind === 'direct' ? NebulaStorage.getRemoteTypingPeers(_presenceList, room.id, emailClean) : [];
         const localTyping = room.kind === 'direct' ? NebulaStorage.getTypingPeers(room.id, emailClean) : [];
-        const typingPeers = remoteTyping.length ? remoteTyping : localTyping;
+        const typingPeers = [...new Set([...remoteTyping, ...localTyping])];
 
         const statusHash = msgs.map(m => NebulaStorage.getMessageStatus(m, emailClean, room.peer, _presenceList, room.id) || '0').join('-');
         const lastMsg = msgs[msgs.length - 1];
@@ -449,7 +455,7 @@ const PageChat = (() => {
         renderTypingIndicator(room);
         renderHeader(room);
 
-        if (currentHash !== lastRenderedHash || presenceChanged) {
+        if (currentHash !== lastRenderedHash) {
             lastRenderedHash = currentHash;
             const atBottom = msgContainer.scrollHeight - msgContainer.scrollTop - msgContainer.clientHeight < 160;
             renderMsgs(room, msgs);

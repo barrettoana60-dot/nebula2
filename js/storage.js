@@ -1172,23 +1172,24 @@ const NebulaStorage = (() => {
         }
     }
 
-    let _presenceCache = [];
-    let _presenceFetchedAt = 0;
-
     async function fetchOnlinePresence(force) {
         const now = Date.now();
-        if (!force && _presenceCache.length && now - _presenceFetchedAt < 4000) {
-            return _presenceCache;
-        }
+        const list = [..._presenceCache];
         try {
-            const res = await fetch('/api/presence');
-            if (res.ok) {
-                const data = await res.json();
-                _presenceCache = data.online || [];
-                _presenceFetchedAt = now;
+            const raw = localStorage.getItem('nebula_presence_local');
+            if (raw) {
+                const map = JSON.parse(raw);
+                Object.entries(map).forEach(([em, data]) => {
+                    const clean = (em || '').toLowerCase().trim();
+                    if (clean && now - (data.timestamp || 0) < 180000) {
+                        if (!list.some(p => p.email === clean)) {
+                            list.push({ email: clean, timestamp: data.timestamp });
+                        }
+                    }
+                });
             }
         } catch (e) {}
-        return _presenceCache;
+        return list;
     }
 
     async function pulsePresence(email, typingRoom, readRoom) {
