@@ -270,11 +270,21 @@ const PageRepository = (() => {
                 NebulaStorage.saveState(state);
                 renderList(document.getElementById('repo-list-container'), state);
 
-                // Sync with Supabase in background
+                // Sync with Supabase in background, com aviso claro de sucesso/falha
+                txt.textContent = 'Sincronizando com a nuvem...';
                 try {
-                    await NebulaStorage.saveStateAsync(state);
+                    const ok = await NebulaStorage.saveStateAsync(state);
+                    if (ok) {
+                        txt.textContent = 'Arquivo(s) salvos no repositório e sincronizados na nuvem.';
+                        if (window.PageProfile) PageProfile.showToast('Repositório atualizado', 'Documentos salvos e sincronizados na nuvem.');
+                    } else {
+                        txt.textContent = 'Salvo neste dispositivo. Sincronização com a nuvem falhou — será tentada novamente.';
+                        if (window.PageProfile) PageProfile.showToast('Salvo localmente', 'A nuvem não respondeu; nova tentativa automática em 20s.');
+                        setTimeout(() => { NebulaStorage.saveStateAsync(state).catch(() => {}); }, 20000);
+                    }
                 } catch (saveErr) {
                     console.warn('Save async fallback to local:', saveErr);
+                    txt.textContent = 'Salvo neste dispositivo. Sincronização com a nuvem falhou.';
                 }
             }
         });
@@ -448,7 +458,7 @@ const PageRepository = (() => {
                     <div class="file-card">
                         <div>
                             <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:0.5rem;">
-                                <span style="font-size:0.72rem; text-transform:uppercase; color:var(--color-blue); font-weight:700; letter-spacing:0.05em">${doc.document_type || doc.kind || 'DOCUMENTO'}</span>
+                                <span style="font-size:0.72rem; text-transform:uppercase; color:var(--color-blue); font-weight:700; letter-spacing:0.05em">${DocumentEngine.normalizeDocType(doc.document_type || doc.kind || 'DOCUMENTO')}</span>
                                 <span style="font-size:0.7rem; ${visStyle}">${visIcon}</span>
                             </div>
                             <div class="file-card-title" title="${doc.name}">${doc.name}</div>

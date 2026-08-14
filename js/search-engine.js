@@ -181,16 +181,18 @@ const SearchEngine = (() => {
     }
 
     async function fetchArticlesForQuery(query, limit = 16, filterQuery = null) {
-        const perSource = Math.max(4, Math.ceil(limit / 5));
-        const [scielo, openalex, ss, doaj, cr, epmc] = await Promise.all([
+        const perSource = Math.max(5, Math.ceil(limit / 5));
+        const [scielo, openalex, ss, doaj, cr, epmc, arxiv, pubmed] = await Promise.all([
             searchSciELO(query, perSource),
             searchOpenAlex(query, perSource),
             searchSemanticScholar(query, perSource),
             searchDOAJ(query, perSource),
             searchCrossref(query, perSource),
-            searchEuropePMC(query, Math.max(3, perSource - 2))
+            searchEuropePMC(query, Math.max(3, perSource - 2)),
+            searchArXiv(query, Math.max(3, perSource - 2)),
+            searchPubMed(query, Math.max(3, perSource - 2))
         ]);
-        let articles = dedupeArticles([...scielo, ...openalex, ...ss, ...doaj, ...cr, ...epmc]);
+        let articles = dedupeArticles([...scielo, ...openalex, ...ss, ...doaj, ...cr, ...epmc, ...arxiv, ...pubmed]);
         const gate = filterQuery || query;
         if (gate && gate.trim()) {
             articles = articles.filter(a => !isOffTopicForQuery(a, gate));
@@ -235,23 +237,27 @@ const SearchEngine = (() => {
         const src = (source || '').toLowerCase();
         const c = parseInt(citations) || 0;
         
-        // High impact journals / Top tier
-        if (src.includes('nature') || src.includes('science') || src.includes('ieee') || src.includes('acm') || src.includes('lancet') || src.includes('cell') || c >= 50) {
-            return { grade: 'A1', color: '#10b981', label: 'Qualis A1 (Alto Impacto Internacional)' };
+        // Estimativa de estrato Qualis (heurística baseada em periódico, indexação e citações — não é a classificação oficial CAPES)
+        const a1 = ['nature', 'science', 'ieee', 'acm', 'lancet', 'cell', 'nejm', 'new england', 'jama', 'bmj', 'pnas', 'chemical reviews', 'annual review'];
+        const a2 = ['springer', 'elsevier', 'wiley', 'oxford', 'cambridge', 'taylor & francis', 'sage', 'acs ', 'rsc ', 'american journal', 'european journal'];
+        const a3 = ['scielo', 'frontiers', 'mdpi', 'plos', 'hindawi', 'peerj', 'bmc ', 'scientific reports'];
+        const a4 = ['doaj', 'redalyc', 'revista', 'journal of', 'international journal', 'brazilian journal', 'arxiv', 'pubmed', 'europe pmc'];
+        if (a1.some(s => src.includes(s)) || c >= 50) {
+            return { grade: 'A1', color: '#10b981', label: 'Qualis A1 estimado (Alto Impacto Internacional)' };
         }
-        if (src.includes('springer') || src.includes('elsevier') || src.includes('wiley') || src.includes('oxford') || src.includes('cambridge') || c >= 25) {
-            return { grade: 'A2', color: '#059669', label: 'Qualis A2 (Impacto Internacional)' };
+        if (a2.some(s => src.includes(s)) || c >= 25) {
+            return { grade: 'A2', color: '#059669', label: 'Qualis A2 estimado (Impacto Internacional)' };
         }
-        if (src.includes('scielo') || src.includes('frontiers') || src.includes('mdpi') || src.includes('plos') || c >= 12) {
-            return { grade: 'A3', color: '#3b82f6', label: 'Qualis A3 (Excelente Circulação)' };
+        if (a3.some(s => src.includes(s)) || c >= 12) {
+            return { grade: 'A3', color: '#3b82f6', label: 'Qualis A3 estimado (Excelente Circulação)' };
         }
-        if (src.includes('doaj') || src.includes('redalyc') || src.includes('revista') || c >= 6) {
-            return { grade: 'A4', color: '#6366f1', label: 'Qualis A4 (Relevância Nacional/Int.)' };
+        if (a4.some(s => src.includes(s)) || c >= 6) {
+            return { grade: 'A4', color: '#6366f1', label: 'Qualis A4 estimado (Relevância Nacional/Int.)' };
         }
         if (c >= 2 || (url && url.includes('doi.org'))) {
-            return { grade: 'B1', color: '#f59e0b', label: 'Qualis B1 (Periódico Indexado)' };
+            return { grade: 'B1', color: '#f59e0b', label: 'Qualis B1 estimado (Periódico Indexado)' };
         }
-        return { grade: 'B2', color: '#8b5cf6', label: 'Qualis B2 (Produção Acadêmica)' };
+        return { grade: 'B2', color: '#8b5cf6', label: 'Qualis B2 estimado (Produção Acadêmica)' };
     }
 
     function mapArticle(base) {
@@ -426,6 +432,62 @@ const SearchEngine = (() => {
                 citations: item.citedByCount || 0,
                 url: item.doi ? `https://doi.org/${item.doi}` : (item.pmid ? `https://pubmed.ncbi.nlm.nih.gov/${item.pmid}/` : ''),
                 provider: 'Europe PMC'
+            }));
+        } catch { return []; }
+    }
+
+    async function searchArXiv(query, limit = 5) {
+        try {
+            const params = new URLSearchParams({
+                search_query: `all:${query}`,
+                start: '0',
+                max_results: String(limit),
+                sortBy: 'relevance'
+            });
+            const resp = await fetch(`https://export.arxiv.org/api/query?${params}`, { signal: AbortSignal.timeout(12000) });
+            if (!resp.ok) return [];
+            const xml = new DOMParser().parseFromString(await resp.text(), 'application/xml');
+            return [...xml.querySelectorAll('entry')].map(entry => {
+                const get = (tag) => entry.querySelector(tag)?.textContent?.trim() || '';
+                const authors = [...entry.querySelectorAll('author name')].slice(0, 4).map(n => n.textContent.trim()).join(', ');
+                const year = (get('published') || '').slice(0, 4);
+                return mapArticle({
+                    title: get('title').replace(/\s+/g, ' '),
+                    authors: authors || 'Não informado',
+                    year: year || '?',
+                    abstract: get('summary').replace(/\s+/g, ' ').slice(0, 400),
+                    source: 'arXiv (preprint)',
+                    citations: 0,
+                    url: get('id'),
+                    provider: 'arXiv'
+                });
+            });
+        } catch { return []; }
+    }
+
+    async function searchPubMed(query, limit = 5) {
+        try {
+            const searchParams = new URLSearchParams({
+                db: 'pubmed', term: query, retmode: 'json', retmax: String(limit), sort: 'relevance'
+            });
+            const idResp = await fetch(`https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?${searchParams}`, { signal: AbortSignal.timeout(10000) });
+            if (!idResp.ok) return [];
+            const ids = (await idResp.json())?.esearchresult?.idlist || [];
+            if (!ids.length) return [];
+
+            const sumParams = new URLSearchParams({ db: 'pubmed', id: ids.join(','), retmode: 'json' });
+            const sumResp = await fetch(`https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?${sumParams}`, { signal: AbortSignal.timeout(10000) });
+            if (!sumResp.ok) return [];
+            const result = (await sumResp.json())?.result || {};
+            return ids.map(id => result[id]).filter(Boolean).map(item => mapArticle({
+                title: item.title || 'Sem título',
+                authors: (item.authors || []).slice(0, 4).map(a => a.name).join(', ') || 'Não informado',
+                year: (item.pubdate || '').slice(0, 4) || '?',
+                abstract: '',
+                source: item.fulljournalname || item.source || 'PubMed',
+                citations: 0,
+                url: `https://pubmed.ncbi.nlm.nih.gov/${item.uid}/`,
+                provider: 'PubMed'
             }));
         } catch { return []; }
     }

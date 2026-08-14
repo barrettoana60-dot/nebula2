@@ -46,6 +46,7 @@ const PageEditor = (() => {
                     </div>
                     <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
                         <button class="btn btn-sm btn-primary" id="btn-new-doc" style="gap:0.3rem; font-weight:700;">+ Novo Documento</button>
+                        <button class="btn btn-sm" id="btn-save-repo" style="background:rgba(16,185,129,0.15); border:1px solid rgba(16,185,129,0.5); color:#059669; font-weight:700;">Salvar no Repositório</button>
                         <button class="btn btn-sm btn-blue" id="btn-export-doc">Exportar PDF</button>
                         <button class="btn btn-sm btn-red" id="btn-delete-current-doc" title="Excluir este documento">Excluir</button>
                     </div>
@@ -301,6 +302,73 @@ const PageEditor = (() => {
                 localStorage.setItem(`nebula_editor_${state.current_user}`, area.innerHTML);
                 document.getElementById('editor-status').innerText = 'Salvo localmente.';
             }, 500);
+        });
+
+        // --- Salvar no Repositório (nuvem) ---
+        document.getElementById('btn-save-repo')?.addEventListener('click', async () => {
+            const saveBtn = document.getElementById('btn-save-repo');
+            const statusEl = document.getElementById('editor-status');
+            const current = getActiveDoc();
+            current.content = area.innerHTML;
+            current.title = titleInput.value.trim() || current.title || 'Documento';
+            current.updatedAt = new Date().toISOString();
+            saveUserDocs(userEmail, docs);
+
+            saveBtn.disabled = true;
+            saveBtn.textContent = 'Salvando...';
+            if (statusEl) statusEl.innerText = 'Salvando no repositório...';
+
+            const plainText = area.innerText || '';
+            const user = state.users[userEmail] || {};
+            if (!state.repository) state.repository = [];
+
+            let record = state.repository.find(d => d.editor_doc_id === current.id);
+            if (!record) {
+                record = {
+                    id: DocumentEngine.generateUUID(),
+                    editor_doc_id: current.id,
+                    kind: 'Editor',
+                    visibility: 'private',
+                    public_until: null,
+                    is_authorial: true,
+                    uploaded_at: new Date().toISOString().slice(0, 16).replace('T', ' ')
+                };
+                state.repository.push(record);
+            }
+            record.name = current.title;
+            record.title = current.title;
+            record.author = user.name || 'Autor';
+            record.year = new Date().getFullYear();
+            record.document_type = 'Produção Autoral';
+            record.topic = 'Produção Autoral';
+            record.text = plainText.slice(0, 80000);
+            record.editor_html = current.content;
+            record.summary = plainText.replace(/\s+/g, ' ').trim().slice(0, 300);
+            record.keywords = TextEngine.extractKeywordsTFIDF(plainText || current.title, 10);
+            record.updated_at = current.updatedAt;
+
+            NebulaStorage.saveState(state);
+            let ok = false;
+            try {
+                ok = await NebulaStorage.saveStateAsync(state);
+            } catch (e) {
+                console.warn('[Editor] Sync falhou:', e);
+            }
+
+            saveBtn.disabled = false;
+            saveBtn.textContent = 'Salvar no Repositório';
+            if (statusEl) {
+                statusEl.innerText = ok
+                    ? 'Documento salvo no Repositório e sincronizado na nuvem.'
+                    : 'Documento salvo no Repositório deste dispositivo (nuvem indisponível, será tentado novamente).';
+            }
+            if (window.PageProfile) {
+                PageProfile.showToast(
+                    ok ? 'Salvo no Repositório' : 'Salvo localmente',
+                    ok ? `"${current.title}" está disponível na pasta Produção Autoral.` : 'A nuvem não respondeu; o documento ficou salvo neste dispositivo.'
+                );
+            }
+            if (!ok) setTimeout(() => { NebulaStorage.saveStateAsync(state).catch(() => {}); }, 20000);
         });
 
         // --- PDF Export e Limpar ---

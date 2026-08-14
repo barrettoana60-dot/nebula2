@@ -37,7 +37,7 @@ const PageProfile = (() => {
                 <div class="mobile-profile-cover" id="pub-cover-display" style="${coverStyle}"></div>
                 <div style="padding:1.5rem 2rem 2rem; margin-top:-40px; position:relative; z-index:2;">
                     <div style="display:flex; align-items:flex-end; gap:1.25rem; flex-wrap:wrap;">
-                        <div style="width:88px; height:88px; border-radius:22px; background:var(--color-blue); display:flex; align-items:center; justify-content:center; font-size:2rem; font-weight:800; color:#fff; overflow:hidden; flex-shrink:0; border:3px solid var(--bg-dark); box-shadow:0 8px 24px rgba(0,0,0,0.2); cursor:${user.photo ? 'pointer' : 'default'};" ${user.photo ? `onclick="PageChat.openPhotoViewer('${user.photo.replace(/'/g, "\\'")}','${(user.name || '').replace(/'/g, "\\'")}')"` : ''}>
+                        <div style="width:150px; height:112px; border-radius:20px; background:var(--color-blue); display:flex; align-items:center; justify-content:center; font-size:2rem; font-weight:800; color:#fff; overflow:hidden; flex-shrink:0; border:3px solid var(--bg-dark); box-shadow:0 8px 24px rgba(0,0,0,0.2); cursor:${user.photo ? 'pointer' : 'default'};" ${user.photo ? `onclick="PageChat.openPhotoViewer('${user.photo.replace(/'/g, "\\'")}','${(user.name || '').replace(/'/g, "\\'")}')"` : ''}>
                             ${user.photo ? `<img src="${user.photo}" alt="" style="width:100%;height:100%;object-fit:cover;">` : initial}
                         </div>
                         <div style="flex:1; padding-bottom:0.25rem;">
@@ -84,9 +84,9 @@ const PageProfile = (() => {
 
         let histHtml = '';
         if (history.length) {
-            const recent = history.slice(-10).reverse();
-            histHtml = `<table class="data-table"><tr><th>Consulta</th><th>Data</th><th>Tema</th><th>Intenção</th></tr>`;
-            recent.forEach(h => { histHtml += `<tr><td>${h.query||''}</td><td>${h.time||''}</td><td>${h.topic||''}</td><td>${h.intent||''}</td></tr>`; });
+            const recent = history.slice(0, 10);
+            histHtml = `<table class="data-table"><tr><th>Consulta</th><th>Data</th><th>Categoria</th></tr>`;
+            recent.forEach(h => { histHtml += `<tr><td>${h.query||''}</td><td>${h.dateStr||h.time||''}</td><td>${h.category||h.topic||''}</td></tr>`; });
             histHtml += `</table>`;
         }
 
@@ -237,7 +237,7 @@ const PageProfile = (() => {
             const file = e.target.files[0];
             if (!file) return;
             try {
-                const dataUrl = await compressImage(file, 300, 0.65);
+                const dataUrl = await compressImage(file, 720, 0.85);
                 NebulaStorage.applyUserMedia(state, emailKey, { photo: dataUrl });
                 await NebulaStorage.saveStateAsync(state);
                 NebulaStorage.saveState(state);
@@ -263,7 +263,7 @@ const PageProfile = (() => {
                 return;
             }
             try {
-                const dataUrl = await compressImage(file, 640, 0.55);
+                const dataUrl = await compressImage(file, 1600, 0.82);
                 NebulaStorage.applyUserMedia(state, emailKey, { cover: dataUrl });
                 if (state.current_user) state.current_user = emailKey;
                 await NebulaStorage.saveStateAsync(state);

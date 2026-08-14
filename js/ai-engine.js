@@ -83,7 +83,7 @@ const NebulaAI = (() => {
             for (const payload of payloads) {
                 try {
                     const controller = new AbortController();
-                    const timeoutId = setTimeout(() => controller.abort(), 4000); // 4s timeout max
+                    const timeoutId = setTimeout(() => controller.abort(), options.timeout ?? 30000);
 
                     const response = await fetch(cfg.url, {
                         method: 'POST',
@@ -111,10 +111,10 @@ const NebulaAI = (() => {
         return null;
     }
 
-    async function apiPost(path, body) {
+    async function apiPost(path, body, timeoutMs = 8000) {
         try {
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 3500); // 3.5s timeout max
+            const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
             const response = await fetch(`${API_BASE}${path}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -137,7 +137,7 @@ const NebulaAI = (() => {
             return analysisCache.get(cacheKey);
         }
 
-        const apiResult = await apiPost('/analyze', { text, fileName, fileKind, userResearch, highlights });
+        const apiResult = await apiPost('/analyze', { text, fileName, fileKind, userResearch, highlights }, 20000);
         if (apiResult.ok) {
             if (!highlights) analysisCache.set(cacheKey, apiResult.data);
             return apiResult.data;
@@ -154,7 +154,7 @@ const NebulaAI = (() => {
 
         const content = await groqRequest(
             [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPrompt }],
-            { temperature: 0.35, max_tokens: 2500, response_format: { type: 'json_object' } }
+            { temperature: 0.35, max_tokens: 2500, timeout: 25000, response_format: { type: 'json_object' } }
         );
         if (!content) return generateLocalDocAnalysis(text, fileName, fileKind);
 
@@ -266,7 +266,7 @@ const NebulaAI = (() => {
                     ]
                 }
             ],
-            { model: 'llama-3.2-11b-vision-preview', temperature: 0.2, max_tokens: 800, response_format: { type: 'json_object' } }
+            { model: 'meta-llama/llama-4-scout-17b-16e-instruct', temperature: 0.2, max_tokens: 800, timeout: 25000, response_format: { type: 'json_object' } }
         );
         if (!content) return null;
         try {
@@ -375,13 +375,13 @@ const NebulaAI = (() => {
 
     async function chatWithAI(messages) {
         // 1. Try serverless backend
-        const apiResult = await apiPost('/chat', { messages });
+        const apiResult = await apiPost('/chat', { messages }, 30000);
         if (apiResult.ok && apiResult.data?.reply) {
             return apiResult.data.reply;
         }
 
         // 2. Try direct Groq / OpenRouter call
-        const content = await groqRequest(messages, { temperature: 0.7, max_tokens: 1500 });
+        const content = await groqRequest(messages, { temperature: 0.7, max_tokens: 1500, timeout: 45000 });
         if (content && content.trim().length > 10) {
             return content;
         }

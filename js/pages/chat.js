@@ -673,6 +673,18 @@ const PageChat = (() => {
                     saveStoredMessages(NebulaStorage.mergeMessagesUnique(ls2, [aiMsg]));
                 } catch (e) {
                     console.error('[Chat] AI Llama error:', e);
+                    const errMsg = {
+                        id: Date.now().toString(36) + 'aierr',
+                        room_id: room.id,
+                        room_label: room.label || 'Llama 3.3',
+                        recipient_email: emailClean,
+                        sender_email: 'ai@nebula',
+                        sender_name: 'Llama 3.3',
+                        text: 'Não consegui responder agora (falha de conexão com a IA). Verifique sua internet e tente novamente em instantes.',
+                        timestamp: Date.now(),
+                        created_at: new Date().toISOString(),
+                    };
+                    saveStoredMessages(NebulaStorage.mergeMessagesUnique(getStoredMessages(), [errMsg]));
                 } finally {
                     const aiStatusEl = document.getElementById('chat-status');
                     if (aiStatusEl) aiStatusEl.textContent = '';
