@@ -88,14 +88,18 @@ const NebulaAI = (() => {
 
             for (const payload of attemptsPayloads) {
                 try {
+                    const controller = new AbortController();
+                    const timeout = setTimeout(() => controller.abort(), options.timeout || 30000);
                     const response = await fetch(cfg.url, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
                             'Authorization': `Bearer ${key}`
                         },
-                        body: JSON.stringify(payload)
+                        body: JSON.stringify(payload),
+                        signal: controller.signal
                     });
+                    clearTimeout(timeout);
 
                     if (response.ok) {
                         const data = await response.json();
@@ -115,18 +119,22 @@ const NebulaAI = (() => {
 
     async function apiPost(path, body) {
         try {
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 25000);
             const response = await fetch(`${API_BASE}${path}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(body)
+                body: JSON.stringify(body),
+                signal: controller.signal
             });
+            clearTimeout(timeout);
             if (response.ok) return { ok: true, data: await response.json() };
             const text = await response.text();
             let parsed = null;
             try { parsed = JSON.parse(text); } catch (e) { /* not json */ }
             return { ok: false, status: response.status, bodyText: text, data: parsed };
         } catch (e) {
-            return { ok: false, status: 0, error: e.message };
+            return { ok: false, status: 0, error: e.message || String(e) };
         }
     }
 

@@ -653,9 +653,16 @@ const PageChat = (() => {
                         });
                     });
 
-                    let aiResponse = await NebulaAI.chatWithAI(messages);
+                    let aiResponse;
+                    try {
+                        aiResponse = await NebulaAI.chatWithAI(messages);
+                    } catch (aiErr) {
+                        console.error('[Chat] AI call threw:', aiErr);
+                        aiResponse = null;
+                    }
+
                     if (!aiResponse || aiResponse.trim().length < 2) {
-                        aiResponse = 'Olá! Pode elaborar mais sua pergunta? Estou pronto para ajudar com sua pesquisa.';
+                        aiResponse = 'Desculpe — não consegui gerar uma resposta agora. Tente novamente em alguns instantes.';
                     }
 
                     const aiMsg = {
@@ -673,6 +680,22 @@ const PageChat = (() => {
                     saveStoredMessages(NebulaStorage.mergeMessagesUnique(ls2, [aiMsg]));
                 } catch (e) {
                     console.error('[Chat] AI Llama error:', e);
+                    const statusElErr = document.getElementById('chat-status');
+                    if (statusElErr) statusElErr.textContent = 'Erro ao gerar resposta da IA.';
+                    // store an error message so user sees a trace in chat
+                    const errMsg = {
+                        id: Date.now().toString(36) + 'aierr',
+                        room_id: room.id,
+                        room_label: room.label || 'Llama 3.3',
+                        recipient_email: emailClean,
+                        sender_email: 'ai@nebula',
+                        sender_name: 'Llama 3.3',
+                        text: 'Erro: não foi possível obter resposta da IA no momento.',
+                        timestamp: Date.now(),
+                        created_at: new Date().toISOString(),
+                    };
+                    const ls3 = getStoredMessages();
+                    saveStoredMessages(NebulaStorage.mergeMessagesUnique(ls3, [errMsg]));
                 } finally {
                     const aiStatusEl = document.getElementById('chat-status');
                     if (aiStatusEl) aiStatusEl.textContent = '';

@@ -204,6 +204,7 @@ const PageRepository = (() => {
                     </div>
                     <div style="display:flex; gap:1rem; margin-top:1.25rem;">
                         <button class="btn btn-primary" id="rev-confirm-btn" style="flex:1; padding:0.6rem; font-weight:700;">Confirmar e Salvar no Repositório</button>
+                        <button class="btn" id="rev-edit-btn" style="flex:0.6; padding:0.6rem;">Editar no Editor</button>
                         <button class="btn btn-red" id="rev-discard-btn" style="flex:0.4; padding:0.6rem;">Descartar</button>
                     </div>
                 `;
@@ -248,7 +249,10 @@ const PageRepository = (() => {
                     currentReviewIndex++;
                     renderReview();
                 });
-                
+                document.getElementById('rev-edit-btn')?.addEventListener('click', () => {
+                    window._editRepoDoc(doc.id);
+                });
+
                 document.getElementById('rev-discard-btn').addEventListener('click', () => {
                     currentReviewIndex++;
                     renderReview();
@@ -257,6 +261,26 @@ const PageRepository = (() => {
             
             document.getElementById('repo-upload-container').appendChild(reviewContainer);
             renderReview();
+            
+                // Permite abrir o documento atual no Editor para edição completa
+                window._editRepoDoc = async (docId) => {
+                    try {
+                        const st = NebulaApp.getState();
+                        const doc = (st.repository || []).find(d => d.id === docId);
+                        if (!doc) return;
+                        const userEmail = st.current_user;
+                        const key = `nebula_docs_v2_${(userEmail||'').toLowerCase().trim()}`;
+                        const editorDoc = {
+                            id: doc.id,
+                            title: doc.title || doc.name || 'Documento',
+                            content: doc.text ? `<div>${(doc.text || '').replace(/\n/g,'<br>')}</div>` : (doc.summary || '<p>Sem conteúdo</p>'),
+                            updatedAt: new Date().toISOString()
+                        };
+                        try { localStorage.setItem(key, JSON.stringify([editorDoc])); } catch (e) { console.warn('[Repo->Editor] localStorage set failed:', e); }
+                        // Navega para a página do Editor
+                        try { NebulaApp.navigate('Editor'); } catch (e) { NebulaApp.renderPage && NebulaApp.renderPage('Editor'); }
+                    } catch (e) { console.warn('[Repo->Editor] open failed:', e); }
+                };
             
             async function finishUpload() {
                 reviewContainer.remove();
