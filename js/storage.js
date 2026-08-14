@@ -1034,12 +1034,21 @@ const NebulaStorage = (() => {
 
     async function pulsePresence(email, typingRoom, readRoom) {
         if (!email) return;
+        const clean = (email || '').toLowerCase().trim();
+        const now = Date.now();
+        try {
+            const raw = localStorage.getItem('nebula_presence_local');
+            const map = raw ? JSON.parse(raw) : {};
+            map[clean] = { timestamp: now, typing_room: typingRoom || null, read_room: readRoom || null };
+            localStorage.setItem('nebula_presence_local', JSON.stringify(map));
+        } catch (e) {}
+
         try {
             await fetch('/api/presence', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    email: (email || '').toLowerCase().trim(),
+                    email: clean,
                     typing_room: typingRoom || null,
                     read_room: readRoom || null
                 })
@@ -1047,9 +1056,23 @@ const NebulaStorage = (() => {
         } catch (e) {}
     }
 
-    function isUserOnline(presenceList, email) {
+    function isUserOnline(presenceList, email, stateObj) {
+        if (!email) return false;
         const clean = (email || '').toLowerCase().trim();
-        return (presenceList || []).some(p => p.email === clean);
+        if (stateObj && (stateObj.current_user || '').toLowerCase().trim() === clean) {
+            return true;
+        }
+        if ((presenceList || []).some(p => p.email === clean)) return true;
+        try {
+            const raw = localStorage.getItem('nebula_presence_local');
+            if (raw) {
+                const map = JSON.parse(raw);
+                if (map[clean] && (Date.now() - (map[clean].timestamp || 0) < 180000)) {
+                    return true;
+                }
+            }
+        } catch (e) {}
+        return false;
     }
 
     function getRemoteTypingPeers(presenceList, roomId, myEmail) {

@@ -167,12 +167,17 @@ const PageConnections = (() => {
                 `<span style="font-size:0.72rem; color:var(--text-white-60);">• ${cp.label}</span>`
             ).join('<br>');
 
+            const isOnline = NebulaStorage.isUserOnline([], conn.email, NebulaApp.getState());
+
             return `
                 <div style="background:rgba(255,255,255,0.35); border-radius:12px; padding:0.75rem; margin-bottom:0.6rem; border:1px solid rgba(0,0,0,0.06); cursor:pointer;"
                      onclick="PageProfile.render(document.getElementById('pageContainer'), NebulaApp.getState(), '${conn.email}')">
                     <div style="display:flex; align-items:center; gap:0.6rem; margin-bottom:0.4rem;">
-                        <div style="width:34px; height:34px; border-radius:50%; background:var(--color-blue); display:flex; align-items:center; justify-content:center; font-size:0.9rem; font-weight:700; color:#fff; overflow:hidden; flex-shrink:0;">
-                            ${conn.photo ? `<img src="${conn.photo}" alt="" style="width:100%;height:100%;object-fit:cover;">` : initial}
+                        <div style="width:36px; height:36px; border-radius:50%; background:var(--color-blue); display:flex; align-items:center; justify-content:center; font-size:0.9rem; font-weight:700; color:#fff; overflow:visible; flex-shrink:0; position:relative;">
+                            <div style="width:100%; height:100%; border-radius:50%; overflow:hidden; display:flex; align-items:center; justify-content:center;">
+                                ${conn.photo ? `<img src="${conn.photo}" alt="" style="width:100%;height:100%;object-fit:cover;">` : initial}
+                            </div>
+                            ${isOnline ? '<span class="online-dot" style="width:9px; height:9px; bottom:0; right:0;" title="Online"></span>' : ''}
                         </div>
                         <div style="flex:1; min-width:0;">
                             <div style="font-weight:700; font-size:0.88rem; color:var(--text-white); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${conn.name || conn.email}</div>

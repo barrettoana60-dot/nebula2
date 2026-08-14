@@ -120,9 +120,12 @@ const NebulaApp = (() => {
         const chip = document.getElementById('navUserChip');
         if (chip) {
             chip.innerHTML = `
-                <div style="display:flex; align-items:center; gap:0.5rem;">
-                    <div style="width:20px; height:20px; border-radius:50%; background:var(--color-blue); display:flex; align-items:center; justify-content:center; font-size:0.7rem; font-weight:700; color:#fff; overflow:hidden; flex-shrink:0;">
-                        ${user.photo ? `<img src="${user.photo}" alt="" style="width:100%;height:100%;object-fit:cover;">` : (user.name || 'P').trim().charAt(0).toUpperCase()}
+                <div style="display:flex; align-items:center; gap:0.55rem;">
+                    <div style="width:24px; height:24px; border-radius:50%; background:var(--color-blue); display:flex; align-items:center; justify-content:center; font-size:0.75rem; font-weight:700; color:#fff; overflow:visible; flex-shrink:0; position:relative;">
+                        <div style="width:100%; height:100%; border-radius:50%; overflow:hidden; display:flex; align-items:center; justify-content:center;">
+                            ${user.photo ? `<img src="${user.photo}" alt="" style="width:100%;height:100%;object-fit:cover;">` : (user.name || 'P').trim().charAt(0).toUpperCase()}
+                        </div>
+                        <span class="online-dot" style="width:8px; height:8px; bottom:-1px; right:-1px;" title="Online"></span>
                     </div>
                     <span>${(user.name || 'Perfil').slice(0, 18)}</span>
                 </div>
@@ -130,10 +133,11 @@ const NebulaApp = (() => {
         }
         const mobAvatar = document.getElementById('mobileHdrAvatar');
         if (mobAvatar) {
+            mobAvatar.style.position = 'relative';
             if (user.photo) {
-                mobAvatar.innerHTML = `<img src="${user.photo}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;
+                mobAvatar.innerHTML = `<img src="${user.photo}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%;"><span class="online-dot" style="width:8px; height:8px; bottom:0; right:0;" title="Online"></span>`;
             } else {
-                mobAvatar.textContent = (user.name || 'P').trim().charAt(0).toUpperCase();
+                mobAvatar.innerHTML = `${(user.name || 'P').trim().charAt(0).toUpperCase()}<span class="online-dot" style="width:8px; height:8px; bottom:0; right:0;" title="Online"></span>`;
             }
         }
         updateBell();

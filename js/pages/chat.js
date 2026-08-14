@@ -2,6 +2,7 @@
 const PageChat = (() => {
     let _pollTimer = null;
     let _sendLock = false;
+    let _isAiTyping = false;
     let _optimisticMsgs = [];
     let _typingTimer = null;
     let _presenceTimer = null;
@@ -298,8 +299,8 @@ const PageChat = (() => {
             } else {
                 const photo = getPeerPhoto(r.peer);
                 const initial = (r.label || '?').trim().charAt(0).toUpperCase();
-                const online = r.kind === 'direct' && NebulaStorage.isUserOnline(_presenceList, r.peer);
-                avatarHtml = `<div class="chat-list-item-avatar" style="position:relative;">${photo ? `<img src="${photo}" alt="">` : initial}${online ? '<span class="online-dot"></span>' : ''}</div>`;
+                const online = r.kind === 'direct' && NebulaStorage.isUserOnline(_presenceList, r.peer, state);
+                avatarHtml = `<div class="chat-list-item-avatar" style="position:relative;">${photo ? `<img src="${photo}" alt="">` : initial}${online ? '<span class="online-dot" title="Online"></span>' : ''}</div>`;
             }
 
             return `
@@ -326,13 +327,13 @@ const PageChat = (() => {
         } else {
             const photo = getPeerPhoto(room.peer);
             const initial = (room.label || '?').trim().charAt(0).toUpperCase();
-            const online = NebulaStorage.isUserOnline(_presenceList, room.peer);
-            avatarHtml = `<div class="chat-header-avatar user" style="cursor:pointer;position:relative;" onclick="PageProfile.render(document.getElementById('pageContainer'), NebulaApp.getState(), '${room.peer}')">${photo ? `<img src="${photo}" alt="" onclick="event.stopPropagation();PageChat.openPhotoViewer('${photo.replace(/'/g, "\\'")}','${(room.label || '').replace(/'/g, "\\'")}')">` : initial}${online ? '<span class="online-dot"></span>' : ''}</div>`;
+            const online = NebulaStorage.isUserOnline(_presenceList, room.peer, state);
+            avatarHtml = `<div class="chat-header-avatar user" style="cursor:pointer;position:relative;" onclick="PageProfile.render(document.getElementById('pageContainer'), NebulaApp.getState(), '${room.peer}')">${photo ? `<img src="${photo}" alt="" onclick="event.stopPropagation();PageChat.openPhotoViewer('${photo.replace(/'/g, "\\'")}','${(room.label || '').replace(/'/g, "\\'")}')">` : initial}${online ? '<span class="online-dot" title="Online"></span>' : ''}</div>`;
             const sim = room.similarity || 0;
             const viewed = NebulaStorage.hasViewedProfile(state, emailClean, room.peer);
             const topics = room.shared_topics?.length ? room.shared_topics.slice(0, 3).join(', ') : 'Pesquisa Científica';
             subtitleHtml =
-                (online ? `<span style="font-size:0.8rem;color:#10b981;font-weight:600;margin-right:8px;">● Online</span>` : `<span style="font-size:0.8rem;color:var(--text-white-40);margin-right:8px;">○ Offline</span>`) +
+                (online ? `<span style="font-size:0.8rem;color:#10b981;font-weight:600;margin-right:8px;display:inline-flex;align-items:center;gap:4px;"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#10b981;"></span> Online</span>` : `<span style="font-size:0.8rem;color:var(--text-white-40);margin-right:8px;">○ Offline</span>`) +
                 (viewed ? `<span style="font-size:0.8rem;color:#10b981;font-weight:600;margin-right:8px;">✓ Visualizado</span>` : '') +
                 (sim > 0 ? `<span style="font-size:0.8rem;color:var(--color-blue);font-weight:600;margin-right:8px;">${sim}% afinidade</span>` : '') +
                 `<span style="font-size:0.8rem;color:var(--text-white-60);">• ${topics}</span>` +
@@ -349,7 +350,12 @@ const PageChat = (() => {
 
     function renderTypingIndicator(room) {
         const statusEl = document.getElementById('chat-status');
-        if (!statusEl || room.kind === 'ai') return;
+        if (!statusEl) return;
+        if (room.kind === 'ai' && _isAiTyping) {
+            statusEl.innerHTML = `<span class="chat-typing-indicator"><span class="chat-typing-dot"></span><span class="chat-typing-dot"></span><span class="chat-typing-dot"></span> Llama 3.3 está escrevendo...</span>`;
+            return;
+        }
+        if (room.kind === 'ai') { statusEl.textContent = ''; return; }
         const remoteTyping = NebulaStorage.getRemoteTypingPeers(_presenceList, room.id, emailClean);
         const localTyping = NebulaStorage.getTypingPeers(room.id, emailClean);
         const typingPeers = remoteTyping.length ? remoteTyping : localTyping;
@@ -505,6 +511,41 @@ const PageChat = (() => {
                     ${isMe ? avatarContent : ''}
                 </div>`;
         });
+
+        // Typing indicator bubble inside message feed (Llama or Peer)
+        if (room.kind === 'ai' && _isAiTyping) {
+            html += `
+                <div style="display:flex; gap:0.5rem; align-items:flex-end; justify-content:flex-start; margin-top:0.3rem;" class="chat-typing-row">
+                    <div style="width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,#3b82f6,#1d4ed8);display:flex;align-items:center;justify-content:center;font-size:0.78rem;font-weight:700;color:#fff;flex-shrink:0;box-shadow:0 2px 8px rgba(59,130,246,0.3);">IA</div>
+                    <div style="background:rgba(59,130,246,0.08); border:1px solid rgba(59,130,246,0.22); border-radius:18px 18px 18px 4px; padding:0.6rem 1rem; box-shadow:0 1px 4px rgba(0,0,0,0.06); display:inline-flex; align-items:center; gap:0.5rem;">
+                        <span style="font-size:0.82rem; font-weight:600; color:var(--color-blue);">Llama 3.3 está escrevendo</span>
+                        <span class="chat-typing-dot"></span>
+                        <span class="chat-typing-dot"></span>
+                        <span class="chat-typing-dot"></span>
+                    </div>
+                </div>`;
+        } else if (room.kind === 'direct') {
+            const remoteTyping = NebulaStorage.getRemoteTypingPeers(_presenceList, room.id, emailClean);
+            const localTyping = NebulaStorage.getTypingPeers(room.id, emailClean);
+            const typingPeers = remoteTyping.length ? remoteTyping : localTyping;
+            if (typingPeers.length) {
+                const peerAvatarContent = peerPhoto
+                    ? `<div style="width:34px;height:34px;border-radius:50%;overflow:hidden;flex-shrink:0;box-shadow:0 2px 6px rgba(0,0,0,0.15);"><img src="${peerPhoto}" style="width:100%;height:100%;object-fit:cover;"></div>`
+                    : `<div style="width:34px;height:34px;border-radius:50%;background:var(--color-blue);display:flex;align-items:center;justify-content:center;font-size:0.85rem;font-weight:700;color:#fff;flex-shrink:0;">${(room.label || '?').trim().charAt(0).toUpperCase()}</div>`;
+
+                html += `
+                    <div style="display:flex; gap:0.5rem; align-items:flex-end; justify-content:flex-start; margin-top:0.3rem;" class="chat-typing-row">
+                        ${peerAvatarContent}
+                        <div style="background:rgba(218,200,179,0.95); border:1px solid rgba(0,0,0,0.08); border-radius:18px 18px 18px 4px; padding:0.6rem 1rem; box-shadow:0 1px 4px rgba(0,0,0,0.06); display:inline-flex; align-items:center; gap:0.5rem;">
+                            <span style="font-size:0.82rem; font-weight:600; color:var(--text-white);">${(room.label || '').split(' ')[0]} está digitando</span>
+                            <span class="chat-typing-dot"></span>
+                            <span class="chat-typing-dot"></span>
+                            <span class="chat-typing-dot"></span>
+                        </div>
+                    </div>`;
+            }
+        }
+
         html += '</div>';
         msgContainer.innerHTML = html;
     }
@@ -634,10 +675,11 @@ const PageChat = (() => {
 
             if (room.kind === 'ai') {
                 _sendLock = true;
+                _isAiTyping = true;
                 btn.disabled = true;
                 btn.textContent = '...';
-                const statusEl = document.getElementById('chat-status');
-                if (statusEl) statusEl.innerHTML = `<span class="chat-typing-indicator"><span class="chat-typing-dot"></span><span class="chat-typing-dot"></span><span class="chat-typing-dot"></span>&nbsp;Llama 3.3 está digitando...</span>`;
+                lastRenderedHash = '';
+                loadMessages();
 
                 try {
                     const allMsgs = getStoredMessages().filter(m =>
@@ -686,6 +728,7 @@ const PageChat = (() => {
                     };
                     saveStoredMessages(NebulaStorage.mergeMessagesUnique(getStoredMessages(), [errMsg]));
                 } finally {
+                    _isAiTyping = false;
                     const aiStatusEl = document.getElementById('chat-status');
                     if (aiStatusEl) aiStatusEl.textContent = '';
                     _sendLock = false;

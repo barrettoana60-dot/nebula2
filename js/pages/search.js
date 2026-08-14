@@ -68,6 +68,7 @@ const PageSearch = (() => {
         const isSelf = (uEmail || '').toLowerCase() === (currentEmail || '').toLowerCase();
         const name = userObj.name || uEmail;
         const initial = name.trim().charAt(0).toUpperCase();
+        const isOnline = NebulaStorage.isUserOnline([], uEmail, NebulaApp.getState());
         const affHtml = similarity >= 15
             ? `<span class="tag tag-copper" style="font-size:0.65rem;margin-top:0.3rem;display:inline-block;">${similarity}% afinidade</span>`
             : '';
@@ -76,8 +77,11 @@ const PageSearch = (() => {
         ).join('');
         return `
             <div class="glass" style="display:flex; align-items:center; gap:1rem; padding:1rem; border-radius:16px; margin-bottom:0.75rem; flex-wrap:wrap;">
-                <div style="width:52px; height:52px; border-radius:50%; background:var(--color-blue); display:flex; align-items:center; justify-content:center; font-size:1.3rem; font-weight:700; color:#fff; overflow:hidden; flex-shrink:0; cursor:${userObj.photo ? 'pointer' : 'default'}; box-shadow:0 3px 10px rgba(0,0,0,0.15);" ${userObj.photo ? `onclick="PageChat.openPhotoViewer('${userObj.photo.replace(/'/g, "\\'")}','${(userObj.name || '').replace(/'/g, "\\'")}')"` : ''}>
-                    ${userObj.photo ? `<img src="${userObj.photo}" alt="" style="width:100%;height:100%;object-fit:cover;">` : initial}
+                <div style="width:52px; height:52px; border-radius:50%; background:var(--color-blue); display:flex; align-items:center; justify-content:center; font-size:1.3rem; font-weight:700; color:#fff; overflow:visible; flex-shrink:0; position:relative; cursor:${userObj.photo ? 'pointer' : 'default'}; box-shadow:0 3px 10px rgba(0,0,0,0.15);" ${userObj.photo ? `onclick="PageChat.openPhotoViewer('${userObj.photo.replace(/'/g, "\\'")}','${(userObj.name || '').replace(/'/g, "\\'")}')"` : ''}>
+                    <div style="width:100%;height:100%;border-radius:50%;overflow:hidden;display:flex;align-items:center;justify-content:center;">
+                        ${userObj.photo ? `<img src="${userObj.photo}" alt="" style="width:100%;height:100%;object-fit:cover;">` : initial}
+                    </div>
+                    ${isOnline ? '<span class="online-dot" style="width:11px; height:11px; bottom:2px; right:2px;" title="Online"></span>' : ''}
                 </div>
                 <div style="flex:1; min-width:200px;">
                     <div style="font-weight:700; font-size:1.05rem; color:var(--text-white);">${name} ${isSelf ? '<span class="tag" style="font-size:0.65rem;">Você</span>' : ''}</div>

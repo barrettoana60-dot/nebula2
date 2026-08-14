@@ -24,8 +24,8 @@ const PageProfile = (() => {
         const topTerms = Object.keys(userInterest).slice(0, 15);
         const userWs = state.workspaces[targetEmail] || {};
         const publicDocs = (userWs.repository || []).filter(d => d.visibility === 'public' || d.topic);
-        const initial = (user.name || targetEmail).trim().charAt(0).toUpperCase();
-        const coverStyle = user.cover ? `background-size:cover;background-position:center;min-height:140px;` : 'min-height:140px;';
+        const isOnline = NebulaStorage.isUserOnline([], targetEmail, state);
+        const coverStyle = user.cover ? `background-size:cover;background-position:center;min-height:220px;image-rendering:-webkit-optimize-contrast;` : 'min-height:220px;';
 
         container.innerHTML = `
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem;">
@@ -33,15 +33,21 @@ const PageProfile = (() => {
                 <button class="btn btn-primary" id="pub-msg-btn">Enviar Mensagem</button>
             </div>
 
-            <div class="glass-outer mb-1" style="padding:0; overflow:hidden; border-radius:20px;">
+            <div class="glass-outer mb-1" style="padding:0; overflow:hidden; border-radius:24px;">
                 <div class="mobile-profile-cover" id="pub-cover-display" style="${coverStyle}"></div>
-                <div style="padding:1.5rem 2rem 2rem; margin-top:-40px; position:relative; z-index:2;">
+                <div style="padding:1.5rem 2rem 2rem; margin-top:-55px; position:relative; z-index:2;">
                     <div style="display:flex; align-items:flex-end; gap:1.25rem; flex-wrap:wrap;">
-                        <div style="width:150px; height:112px; border-radius:20px; background:var(--color-blue); display:flex; align-items:center; justify-content:center; font-size:2rem; font-weight:800; color:#fff; overflow:hidden; flex-shrink:0; border:3px solid var(--bg-dark); box-shadow:0 8px 24px rgba(0,0,0,0.2); cursor:${user.photo ? 'pointer' : 'default'};" ${user.photo ? `onclick="PageChat.openPhotoViewer('${user.photo.replace(/'/g, "\\'")}','${(user.name || '').replace(/'/g, "\\'")}')"` : ''}>
-                            ${user.photo ? `<img src="${user.photo}" alt="" style="width:100%;height:100%;object-fit:cover;">` : initial}
+                        <div style="width:180px; height:135px; border-radius:22px; background:linear-gradient(135deg,var(--color-blue),#1d4ed8); display:flex; align-items:center; justify-content:center; font-size:2.4rem; font-weight:800; color:#fff; overflow:visible; flex-shrink:0; position:relative; border:4px solid var(--bg-dark); box-shadow:0 12px 36px rgba(0,0,0,0.28); cursor:${user.photo ? 'pointer' : 'default'};" ${user.photo ? `onclick="PageChat.openPhotoViewer('${user.photo.replace(/'/g, "\\'")}','${(user.name || '').replace(/'/g, "\\'")}')"` : ''}>
+                            <div style="width:100%;height:100%;border-radius:18px;overflow:hidden;display:flex;align-items:center;justify-content:center;">
+                                ${user.photo ? `<img src="${user.photo}" alt="" style="width:100%;height:100%;object-fit:cover;">` : initial}
+                            </div>
+                            ${isOnline ? '<span class="online-dot" style="width:14px;height:14px;bottom:4px;right:4px;" title="Online"></span>' : ''}
                         </div>
                         <div style="flex:1; padding-bottom:0.25rem;">
-                            <h2 style="font-size:1.6rem; font-weight:700; margin-bottom:0.25rem; color:var(--text-white);">${user.name || 'Pesquisador'}</h2>
+                            <div style="display:flex;align-items:center;gap:0.6rem;flex-wrap:wrap;">
+                                <h2 style="font-size:1.6rem; font-weight:700; margin-bottom:0.25rem; color:var(--text-white);">${user.name || 'Pesquisador'}</h2>
+                                ${isOnline ? '<span class="tag" style="background:rgba(16,185,129,0.15);border-color:#10b981;color:#10b981;font-weight:700;font-size:0.75rem;display:inline-flex;align-items:center;gap:4px;"><span style="width:6px;height:6px;border-radius:50%;background:#10b981;"></span> Online</span>' : '<span class="tag" style="font-size:0.72rem;color:var(--text-white-40);">Offline</span>'}
+                            </div>
                             <p style="color:var(--text-white-60); font-size:0.9rem;">@${targetEmail.split('@')[0]}</p>
                             ${user.research ? `<div style="margin-top:0.75rem; font-size:0.95rem; color:var(--text-white-80); line-height:1.5;"><b>Linha de Pesquisa:</b> ${user.research}</div>` : ''}
                         </div>
@@ -103,15 +109,21 @@ const PageProfile = (() => {
                 <input type="file" id="prof-cover-input" accept="image/*" style="display:none">
                 <div class="mobile-profile-identity">
                     <div class="mobile-profile-left">
-                        <div class="mobile-profile-avatar-wrap">
-                            <div class="mobile-profile-avatar" id="prof-avatar-display" style="cursor:${user.photo ? 'pointer' : 'default'};" ${user.photo ? `onclick="PageChat.openPhotoViewer('${user.photo.replace(/'/g, "\\'")}','${(user.name || '').replace(/'/g, "\\'")}')"` : ''}>${user.photo ? `<img src="${user.photo}" alt="Foto" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;">` : (user.name || 'P').trim().charAt(0).toUpperCase()}</div>
+                        <div class="mobile-profile-avatar-wrap" style="position:relative;">
+                            <div class="mobile-profile-avatar" id="prof-avatar-display" style="cursor:${user.photo ? 'pointer' : 'default'};position:relative;" ${user.photo ? `onclick="PageChat.openPhotoViewer('${user.photo.replace(/'/g, "\\'")}','${(user.name || '').replace(/'/g, "\\'")}')"` : ''}>
+                                ${user.photo ? `<img src="${user.photo}" alt="Foto" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;">` : (user.name || 'P').trim().charAt(0).toUpperCase()}
+                                <span class="online-dot" style="width:14px;height:14px;bottom:4px;right:4px;" title="Online"></span>
+                            </div>
                             <button type="button" class="prof-photo-btn" id="prof-photo-btn" title="Alterar foto">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
                             </button>
                             <input type="file" id="prof-photo-input" accept="image/*" style="display:none">
                         </div>
                         <div class="mobile-profile-meta">
-                            <h2>${user.name || 'Pesquisador'}</h2>
+                            <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;">
+                                <h2>${user.name || 'Pesquisador'}</h2>
+                                <span class="tag" style="background:rgba(16,185,129,0.15);border-color:#10b981;color:#10b981;font-weight:700;font-size:0.72rem;display:inline-flex;align-items:center;gap:4px;"><span style="width:6px;height:6px;border-radius:50%;background:#10b981;"></span> Online</span>
+                            </div>
                             <p>@${(state.current_user || '').split('@')[0] || 'usuario'}</p>
                         </div>
                     </div>
