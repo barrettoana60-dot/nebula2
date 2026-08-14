@@ -1264,6 +1264,9 @@ const NebulaStorage = (() => {
             });
         };
 
+        const readKey = 'nebula_room_read_' + roomId + '_' + reader;
+        localStorage.setItem(readKey, Date.now().toString());
+
         markList(state.community_messages);
         try {
             const storeKey = 'nebula_chat_store_v3_' + reader;
@@ -1292,10 +1295,16 @@ const NebulaStorage = (() => {
         const peer = (peerEmail || '').toLowerCase().trim();
         if (sender !== me) return null;
 
-        // 1. Visto (dois pontinhos verdes)
+        const msgTs = msg.timestamp || (msg.created_at ? new Date(msg.created_at).getTime() : 0);
+
+        // 1. Visto (dois pontinhos verdes) - leitura gravada em sala
+        try {
+            const roomReadTs = parseInt(localStorage.getItem('nebula_room_read_' + roomId + '_' + peer) || '0');
+            if (roomReadTs && roomReadTs >= msgTs) return 'read';
+        } catch (e) {}
+
         const peerPresence = (presenceList || []).find(p => (p.email || '').toLowerCase().trim() === peer);
         const readAt = peerPresence?.read_rooms?.[roomId] || 0;
-        const msgTs = msg.timestamp || (msg.created_at ? new Date(msg.created_at).getTime() : 0);
         if (readAt && readAt >= msgTs) return 'read';
 
         if (peerPresence && peerPresence.typing_room === roomId) return 'read';

@@ -434,8 +434,9 @@ const PageChat = (() => {
         const localTyping = room.kind === 'direct' ? NebulaStorage.getTypingPeers(room.id, emailClean) : [];
         const typingPeers = remoteTyping.length ? remoteTyping : localTyping;
 
+        const statusHash = msgs.map(m => NebulaStorage.getMessageStatus(m, emailClean, room.peer, _presenceList, room.id) || '0').join('-');
         const lastMsg = msgs[msgs.length - 1];
-        const currentHash = msgs.length + '::' + (lastMsg?.id || '') + '::' + (lastMsg?.timestamp || '') + '::' + (lastMsg?.text || '').slice(-20) + '::' + _presenceList.length + '::' + _isAiTyping + '::' + typingPeers.join(',');
+        const currentHash = msgs.length + '::' + (lastMsg?.id || '') + '::' + (lastMsg?.timestamp || '') + '::' + (lastMsg?.text || '').slice(-20) + '::' + _presenceList.length + '::' + _isAiTyping + '::' + typingPeers.join(',') + '::' + statusHash;
 
         renderTypingIndicator(room);
         renderHeader(room);
@@ -639,6 +640,16 @@ const PageChat = (() => {
         NebulaStorage.initRealtimePresence(emailClean);
         NebulaStorage.pulsePresence(emailClean, null);
         _presenceTimer = setInterval(() => NebulaStorage.pulsePresence(emailClean, null), 15000);
+
+        if (!window._nebulaChatStorageBound) {
+            window._nebulaChatStorageBound = true;
+            window.addEventListener('storage', (e) => {
+                if (e.key && (e.key.startsWith('nebula_typing_') || e.key.startsWith('nebula_room_read_') || e.key.startsWith('nebula_presence_') || e.key.startsWith('nebula_chat_store_'))) {
+                    lastRenderedHash = '';
+                    loadMessages();
+                }
+            });
+        }
 
         const btn = document.getElementById('chat-send-btn');
         const chatDraft = document.getElementById('chat-draft');
