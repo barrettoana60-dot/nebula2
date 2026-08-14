@@ -65,48 +65,46 @@ const NebulaAI = (() => {
         const modelsToTry = [
             options.model || cfg.model,
             'llama-3.3-70b-versatile',
-            'llama3-70b-8192',
-            'llama-3.1-8b-instant',
-            'llama3-8b-8192'
+            'llama-3.1-8b-instant'
         ];
 
         for (const currentModel of [...new Set(modelsToTry)]) {
-            // Try with response_format first (if requested), then without
-            const attemptsPayloads = [];
             const basePayload = {
                 model: currentModel,
                 messages,
                 temperature: options.temperature ?? 0.7,
                 max_tokens: options.max_tokens ?? 1500
             };
-            if (options.response_format) {
-                attemptsPayloads.push({ ...basePayload, response_format: options.response_format });
-                attemptsPayloads.push({ ...basePayload }); // without response_format as fallback
-            } else {
-                attemptsPayloads.push(basePayload);
-            }
 
-            for (const payload of attemptsPayloads) {
+            const payloads = options.response_format
+                ? [{ ...basePayload, response_format: options.response_format }, basePayload]
+                : [basePayload];
+
+            for (const payload of payloads) {
                 try {
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 4000); // 4s timeout max
+
                     const response = await fetch(cfg.url, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
                             'Authorization': `Bearer ${key}`
                         },
-                        body: JSON.stringify(payload)
+                        body: JSON.stringify(payload),
+                        signal: controller.signal
                     });
+                    clearTimeout(timeoutId);
 
                     if (response.ok) {
                         const data = await response.json();
                         const reply = data.choices?.[0]?.message?.content || null;
                         if (reply) return reply;
                     } else if (response.status === 400 && options.response_format) {
-                        // json_object not supported by this model — try without it
                         continue;
                     }
                 } catch (err) {
-                    console.warn(`[NebulaAI] model ${currentModel} failed:`, err);
+                    // Abort or network error: try next model or fallback
                 }
             }
         }
@@ -115,11 +113,15 @@ const NebulaAI = (() => {
 
     async function apiPost(path, body) {
         try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 3500); // 3.5s timeout max
             const response = await fetch(`${API_BASE}${path}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(body)
+                body: JSON.stringify(body),
+                signal: controller.signal
             });
+            clearTimeout(timeoutId);
             if (response.ok) return { ok: true, data: await response.json() };
             return { ok: false, status: response.status };
         } catch (e) {

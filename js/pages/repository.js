@@ -47,8 +47,11 @@ const PageRepository = (() => {
         container.innerHTML = html;
         renderList(document.getElementById('repo-list-container'), state);
 
-        // Drag and drop support
+        let selectedFiles = [];
         const dropZone = document.getElementById('repo-drop');
+        const fileInput = document.getElementById('repo-file-input');
+
+        // Drag and drop support
         dropZone.addEventListener('dragover', (e) => {
             e.preventDefault();
             dropZone.style.borderColor = 'var(--color-blue)';
@@ -69,11 +72,6 @@ const PageRepository = (() => {
             }
         });
 
-        // Visibility toggle (via pills)
-        // setVisibility is exposed on the module return; handled below
-
-        let selectedFiles = [];
-        const fileInput = document.getElementById('repo-file-input');
         fileInput.addEventListener('change', (e) => {
             selectedFiles = Array.from(e.target.files);
             const nameEl = document.getElementById('repo-file-name');
@@ -261,23 +259,23 @@ const PageRepository = (() => {
             async function finishUpload() {
                 reviewContainer.remove();
                 btn.style.display = 'inline-flex';
-                btn.disabled = true;
-                btn.innerHTML = 'Salvando no repositório...';
-                
-                try {
-                    NebulaStorage.saveState(state);
-                    await NebulaStorage.saveStateAsync(state);
-                } catch (saveErr) {
-                    console.warn('Save async fallback to local:', saveErr);
-                }
-
                 btn.disabled = false;
                 btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><polyline points="20 6 9 17 4 12"/></svg> Analisar e adicionar';
                 
                 selectedFiles = [];
                 fileInput.value = '';
                 document.getElementById('repo-file-name').textContent = 'Clique ou arraste arquivos aqui';
+
+                // Save locally and render UI immediately
+                NebulaStorage.saveState(state);
                 renderList(document.getElementById('repo-list-container'), state);
+
+                // Sync with Supabase in background
+                try {
+                    await NebulaStorage.saveStateAsync(state);
+                } catch (saveErr) {
+                    console.warn('Save async fallback to local:', saveErr);
+                }
             }
         });
     }
