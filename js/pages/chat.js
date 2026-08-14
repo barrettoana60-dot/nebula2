@@ -232,13 +232,16 @@ const PageChat = (() => {
 
     function getStatusLabel(room) {
         if (room.kind === 'ai') return 'Assistente IA';
+        const online = NebulaStorage.isUserOnline(_presenceList, room.peer, state);
         const sim = room.similarity || 0;
         const viewed = NebulaStorage.hasViewedProfile(state, emailClean, room.peer);
         const parts = [];
+        if (online) parts.push('<span style="color:#10b981;font-weight:700;">Online</span>');
+        else parts.push('<span style="color:var(--text-white-40);">Offline</span>');
         if (viewed) parts.push('Visualizado');
         if (sim >= 15) parts.push(`${sim}% afinidade`);
         else if (room.shared_topics?.length) parts.push(room.shared_topics[0]);
-        return parts.length ? parts.join(' · ') : 'Pesquisador';
+        return parts.join(' · ');
     }
 
     async function renderResearcherSearchResults(query) {
@@ -479,15 +482,8 @@ const PageChat = (() => {
                 ? new Date(msg.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
                 : msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
 
-            const msgStatus = isMe && !isAi ? NebulaStorage.getMessageStatus(msg, emailClean, room.peer, _presenceList, room.id) : null;
-            let statusHtml = '';
-            if (msgStatus === 'read') {
-                statusHtml = `<span style="color:#3b82f6;font-weight:800;font-size:0.82rem;letter-spacing:-1.5px;" title="Visualizado">✓✓</span>`;
-            } else if (msgStatus === 'delivered') {
-                statusHtml = `<span style="color:rgba(255,255,255,0.5);font-weight:800;font-size:0.82rem;letter-spacing:-1.5px;" title="Entregue">✓✓</span>`;
-            } else if (msgStatus === 'sent') {
-                statusHtml = `<span style="color:rgba(255,255,255,0.4);font-weight:700;font-size:0.82rem;" title="Enviado">✓</span>`;
-            }
+            const msgStatus = isMe && !isAi ? (NebulaStorage.getMessageStatus(msg, emailClean, room.peer, _presenceList, room.id) || 'delivered') : null;
+            const statusHtml = msgStatus ? renderStatusDots(msgStatus) : '';
 
             // Determine which photo to show for sender avatar
             let avatarContent = '';

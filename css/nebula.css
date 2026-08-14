@@ -2028,15 +2028,19 @@ input:disabled + .slider { opacity: 0.5; cursor: not-allowed; }
     width: 6px;
     height: 6px;
     border-radius: 50%;
-    background: rgba(255,255,255,0.45);
+    background: rgba(140, 130, 120, 0.6);
     display: inline-block;
+    flex-shrink: 0;
+}
+.msg-dot.sent {
+    background: rgba(140, 130, 120, 0.6);
 }
 .msg-dot.delivered {
-    background: rgba(255,255,255,0.7);
+    background: rgba(100, 116, 139, 0.9);
 }
 .msg-dot.read, .msg-dot.green {
-    background: #10b981;
-    box-shadow: 0 0 5px rgba(16,185,129,0.7);
+    background: #10b981 !important;
+    box-shadow: 0 0 6px rgba(16,185,129,0.9) !important;
 }
 
 @keyframes msg-pop-in {
