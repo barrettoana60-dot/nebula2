@@ -261,8 +261,8 @@ const NebulaStorage = (() => {
 
                 const repoToSave = (state.repository || []).map(doc => {
                     const clone = { ...doc };
-                    if (clone.text && clone.text.length > 80000) {
-                        clone.text = clone.text.slice(0, 80000);
+                    if (clone.text && clone.text.length > 50000) {
+                        clone.text = clone.text.slice(0, 50000);
                     }
                     return clone;
                 });
@@ -276,7 +276,22 @@ const NebulaStorage = (() => {
                 if (key === 'repository' || key === 'search_history') continue;
                 toSave[key] = state[key];
             }
-            localStorage.setItem('nebula_db_v5', JSON.stringify(toSave));
+            try {
+                localStorage.setItem('nebula_db_v5', JSON.stringify(toSave));
+            } catch (quotaErr) {
+                // Quota exceeded: trim large text fields across other workspaces to fit
+                console.warn('[Storage] Quota exceeded, trimming workspaces text:', quotaErr);
+                if (toSave.workspaces) {
+                    Object.keys(toSave.workspaces).forEach(wsKey => {
+                        if (toSave.workspaces[wsKey].repository) {
+                            toSave.workspaces[wsKey].repository.forEach(d => {
+                                if (d.text && d.text.length > 20000) d.text = d.text.slice(0, 20000);
+                            });
+                        }
+                    });
+                }
+                localStorage.setItem('nebula_db_v5', JSON.stringify(toSave));
+            }
         } catch (e) {
             console.error('[Storage] Local Save failed:', e);
         }

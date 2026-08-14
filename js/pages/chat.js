@@ -174,16 +174,26 @@ const PageChat = (() => {
                 .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
         }
 
+        // Local messages for this room
+        const localRoomMsgs = getStoredMessages().filter(m =>
+            messageBelongsToRoom(m, targetRoomId, cleanMine, cleanPeer, false)
+        );
+
         let cloudMsgs = [];
         try {
             cloudMsgs = await NebulaStorage.fetchMessagesFromSupabase(targetRoomId, cleanMine, cleanPeer);
+            if (cloudMsgs && cloudMsgs.length > 0) {
+                // Cache any new cloud messages in local store
+                saveStoredMessages(NebulaStorage.mergeMessagesUnique(getStoredMessages(), cloudMsgs));
+            }
         } catch (e) {}
 
         const pending = _optimisticMsgs.filter(m =>
             messageBelongsToRoom(m, targetRoomId, cleanMine, cleanPeer, false)
         );
 
-        return NebulaStorage.mergeMessagesUnique(cloudMsgs, pending)
+        const merged = NebulaStorage.mergeMessagesUnique(localRoomMsgs, cloudMsgs);
+        return NebulaStorage.mergeMessagesUnique(merged, pending)
             .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
     }
 

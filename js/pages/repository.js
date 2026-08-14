@@ -101,37 +101,44 @@ const PageRepository = (() => {
 
             const email = state.current_user;
             const userResearch = (email && state.users[email]) ? state.users[email].research : null;
+            const userName = (email && state.users[email]?.name || '').toLowerCase().trim();
 
-            const pendingDocs = [];
+            if (!state.repository) state.repository = [];
+
+            let addedCount = 0;
             for (let i = 0; i < selectedFiles.length; i++) {
                 const file = selectedFiles[i];
-                const baseProgress = (i / selectedFiles.length) * 100;
+                const baseProgress = Math.round(((i + 1) / selectedFiles.length) * 100);
                 fill.style.width = `${baseProgress}%`;
-                txt.textContent = `Processando ${file.name}...`;
+                txt.textContent = `Processando e analisando ${file.name} (${i + 1}/${selectedFiles.length})...`;
                 
                 try {
                     const record = await DocumentEngine.makeDocumentRecord(file, (stage) => {
                         txt.textContent = `${file.name}: ${stage}`;
                     }, userResearch);
                     
-                    txt.textContent = `${file.name}: Analisando com IA (Llama 3.3)...`;
-                    const aiResult = await NebulaAI.analyzeDocument(record.text, record.name, record.kind, userResearch);
-                    if (aiResult) {
-                        record.title = aiResult.title || record.name;
-                        record.author = aiResult.author || record.author;
-                        record.topic = aiResult.topic || record.topic;
-                        record.year = aiResult.year || record.year;
-                        record.summary = aiResult.summary || record.summary;
-                        if (aiResult.keywords && aiResult.keywords.length) {
-                            record.keywords = [...new Set([...(record.keywords||[]), ...aiResult.keywords])];
-                        }
-                        record.deep_insight = aiResult.insight;
-                        record.ai_analyzed = true;
-                    }
-
                     record.visibility = visibility;
                     record.public_until = visibility === 'public' ? publicUntil : null;
-                    pendingDocs.push(record);
+
+                    // Checar se o autor tem o mesmo nome do usuário logado (Produção Autoral)
+                    const authorLower = (record.author || '').toLowerCase().trim();
+                    if (userName && authorLower && (authorLower.includes(userName) || userName.includes(authorLower))) {
+                        record.topic = 'Produção Autoral';
+                        record.is_authorial = true;
+                    }
+
+                    // Adicionar ao repositório
+                    state.repository.push(record);
+                    addedCount++;
+
+                    // Atualizar interesses do usuário
+                    if (email) {
+                        if (!state.user_interest[email]) state.user_interest[email] = {};
+                        (record.keywords || []).slice(0, 12).forEach(t => {
+                            const k = (t || '').toLowerCase().trim();
+                            if (k) state.user_interest[email][k] = (state.user_interest[email][k] || 0) + 1;
+                        });
+                    }
                 } catch (e) {
                     console.error('Failed to process', file.name, e);
                     txt.textContent = `Erro ao processar ${file.name}`;
@@ -139,149 +146,27 @@ const PageRepository = (() => {
             }
 
             fill.style.width = '100%';
-            txt.textContent = 'Processamento concluído. Aguardando revisão...';
-            
-            // Build Review UI
-            wrap.style.display = 'none';
-            txt.style.display = 'none';
-            btn.style.display = 'none'; // Hide add button temporarily
-            
-            const reviewContainer = document.createElement('div');
-            reviewContainer.id = 'repo-review-container';
-            reviewContainer.className = 'glass mt-1';
-            
-            let currentReviewIndex = 0;
-            
-            const renderReview = () => {
-                if (currentReviewIndex >= pendingDocs.length) {
-                    // All reviewed, save state
-                    finishUpload();
-                    return;
-                }
-                const doc = pendingDocs[currentReviewIndex];
-                reviewContainer.innerHTML = `
-                    <div class="section-title" style="border:none; padding:0; margin-bottom:1rem;">
-                        Revisar Documento (${currentReviewIndex + 1} de ${pendingDocs.length})
-                    </div>
-                    <div class="input-group">
-                        <label class="input-label">Título do Documento</label>
-                        <input type="text" class="input" id="rev-name" value="${doc.name}">
-                    </div>
-                    <div class="grid-50-50" style="gap:1rem;">
-                        <div class="input-group">
-                            <label class="input-label">Autor(es)</label>
-                            <input type="text" class="input" id="rev-author" value="${doc.author || ''}">
-                        </div>
-                        <div class="input-group">
-                            <label class="input-label">Ano</label>
-                            <input type="text" class="input" id="rev-year" value="${doc.year || ''}">
-                        </div>
-                    </div>
-                    <div class="grid-50-50" style="gap:1rem;">
-                        <div class="input-group">
-                            <label class="input-label">Tipo de Documento</label>
-                            <select class="select" id="rev-doc-type" style="height:38px;">
-                                <option value="Artigo Periódico" ${(doc.document_type === 'Artigo Periódico' || !doc.document_type) ? 'selected' : ''}>Artigo Periódico</option>
-                                <option value="Tese de Doutorado" ${doc.document_type === 'Tese de Doutorado' ? 'selected' : ''}>Tese de Doutorado</option>
-                                <option value="Dissertação de Mestrado" ${doc.document_type === 'Dissertação de Mestrado' ? 'selected' : ''}>Dissertação de Mestrado</option>
-                                <option value="Monografia / TCC" ${doc.document_type === 'Monografia / TCC' ? 'selected' : ''}>Monografia / TCC</option>
-                                <option value="Trabalho em Congresso" ${doc.document_type === 'Trabalho em Congresso' ? 'selected' : ''}>Trabalho em Congresso</option>
-                                <option value="Livro / Capítulo" ${doc.document_type === 'Livro / Capítulo' ? 'selected' : ''}>Livro / Capítulo</option>
-                                <option value="Relatório Técnico" ${doc.document_type === 'Relatório Técnico' ? 'selected' : ''}>Relatório Técnico</option>
-                                <option value="Projeto de Pesquisa" ${doc.document_type === 'Projeto de Pesquisa' ? 'selected' : ''}>Projeto de Pesquisa</option>
-                            </select>
-                        </div>
-                        <div class="input-group">
-                            <label class="input-label">Tópico principal</label>
-                            <input type="text" class="input" id="rev-topic" value="${doc.topic || ''}">
-                        </div>
-                    </div>
-                    <div class="input-group">
-                        <label class="input-label">Palavras-chave (separadas por vírgula)</label>
-                        <input type="text" class="input" id="rev-keywords" value="${(doc.keywords||[]).join(', ')}">
-                    </div>
-                    <div class="input-group">
-                        <label class="input-label">Resumo</label>
-                        <textarea class="input" id="rev-summary" style="height:100px; resize:vertical;">${doc.summary || ''}</textarea>
-                    </div>
-                    <div style="display:flex; gap:1rem; margin-top:1rem;">
-                        <button class="btn btn-primary" id="rev-confirm-btn" style="flex:1">Confirmar e Salvar</button>
-                        <button class="btn btn-danger" id="rev-discard-btn" style="flex:1">Descartar Arquivo</button>
-                    </div>
-                `;
-                
-                document.getElementById('rev-confirm-btn').addEventListener('click', () => {
-                    doc.name = document.getElementById('rev-name').value;
-                    doc.author = document.getElementById('rev-author').value;
-                    doc.year = document.getElementById('rev-year').value;
-                    doc.document_type = document.getElementById('rev-doc-type').value;
-                    doc.topic = document.getElementById('rev-topic').value;
-                    doc.keywords = document.getElementById('rev-keywords').value.split(',').map(s => s.trim()).filter(s => s);
-                    doc.summary = document.getElementById('rev-summary').value;
-                    
-                    // Checar se o autor tem o mesmo nome do usuário logado
-                    const email = state.current_user;
-                    const userName = (state.users[email]?.name || '').toLowerCase().trim();
-                    const authorLower = (doc.author || '').toLowerCase().trim();
-                    if (userName && authorLower && (authorLower.includes(userName) || userName.includes(authorLower))) {
-                        doc.topic = 'Produção Autoral';
-                        doc.is_authorial = true;
-                    }
+            txt.textContent = `Salvo com sucesso! ${addedCount} documento(s) arquivado(s).`;
+            txt.style.color = '#10b981';
 
-                    state.repository.push(doc);
-                    
-                    // Update user interest
-                    if (email) {
-                        if (!state.user_interest[email]) state.user_interest[email] = {};
-                        doc.keywords.slice(0, 12).forEach(t => {
-                            state.user_interest[email][t] = (state.user_interest[email][t] || 0) + 1;
-                        });
-                    }
-                    
-                    currentReviewIndex++;
-                    renderReview();
-                });
-                
-                document.getElementById('rev-discard-btn').addEventListener('click', () => {
-                    currentReviewIndex++;
-                    renderReview();
-                });
-            };
-            
-            document.getElementById('repo-upload-container').appendChild(reviewContainer);
-            renderReview();
-            
-            async function finishUpload() {
-                reviewContainer.remove();
-                btn.style.display = 'block';
-                btn.disabled = true;
-                btn.innerHTML = 'Salvando no banco de dados...';
-                
-                try {
-                    await NebulaStorage.saveStateAsync(state);
-                } catch (saveErr) {
-                    console.error('Save failed, data is in local state:', saveErr);
-                }
-
-                btn.disabled = false;
-                btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><polyline points="20 6 9 17 4 12"/></svg> Analisar e adicionar';
-                
-                selectedFiles = [];
-                fileInput.value = '';
-                document.getElementById('repo-file-name').textContent = 'Arraste ou clique para enviar';
-                renderList(document.getElementById('repo-list-container'), state);
+            try {
+                await NebulaStorage.saveStateAsync(state);
+            } catch (saveErr) {
+                console.warn('Save async fallback to local:', saveErr);
             }
+
+            selectedFiles = [];
+            fileInput.value = '';
+            document.getElementById('repo-file-name').textContent = 'Clique ou arraste arquivos aqui';
             
             setTimeout(() => {
                 wrap.style.display = 'none';
                 txt.style.display = 'none';
                 txt.style.color = '';
-            }, 2500);
-            
-            selectedFiles = [];
-            fileInput.value = '';
-            document.getElementById('repo-file-name').textContent = 'Clique ou arraste arquivos (PDF, DOCX, CSV, Imagens, etc.)';
-            renderList(document.getElementById('repo-list-container'), state);
+                btn.disabled = false;
+                btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><polyline points="20 6 9 17 4 12"/></svg> Analisar e adicionar';
+                renderList(document.getElementById('repo-list-container'), state);
+            }, 1200);
         });
     }
 

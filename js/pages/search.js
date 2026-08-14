@@ -214,7 +214,13 @@ const PageSearch = (() => {
     async function performUserSearch(query, state) {
         const resContainer = document.getElementById('search-results-container');
         if (!resContainer) return;
-        if (query) NebulaStorage.recordSearchHistory(state, query, 'pesquisadores');
+        if (query) {
+            NebulaStorage.recordSearchHistory(state, query, 'pesquisadores');
+            const email = (state.current_user || '').toLowerCase().trim();
+            const currentHist = getStoredSearchHistory(email);
+            const filtered = currentHist.filter(h => (h.query || '').toLowerCase() !== query.toLowerCase());
+            saveStoredSearchHistory(email, [{ query, category: 'pesquisadores', timestamp: Date.now() }, ...filtered]);
+        }
 
         resContainer.innerHTML = `<div class="spinner-overlay"><div class="spinner"></div><div style="text-align:center;margin-top:1rem;color:var(--text-white-60)">Buscando pesquisadores na comunidade...</div></div>`;
 
@@ -250,7 +256,13 @@ const PageSearch = (() => {
     async function performSearch(query, imageFile, state) {
         const resContainer = document.getElementById('search-results-container');
         if (!resContainer) return;
-        if (query) NebulaStorage.recordSearchHistory(state, query, 'artigos');
+        if (query) {
+            NebulaStorage.recordSearchHistory(state, query, 'artigos');
+            const email = (state.current_user || '').toLowerCase().trim();
+            const currentHist = getStoredSearchHistory(email);
+            const filtered = currentHist.filter(h => (h.query || '').toLowerCase() !== query.toLowerCase());
+            saveStoredSearchHistory(email, [{ query, category: 'artigos', timestamp: Date.now() }, ...filtered]);
+        }
 
         resContainer.innerHTML = `<div class="spinner-overlay"><div class="spinner"></div><div style="text-align:center;margin-top:1rem;color:var(--text-white-60)">Consultando bases acadêmicas...</div></div>`;
 

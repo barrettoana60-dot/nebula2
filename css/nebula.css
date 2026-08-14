@@ -1157,13 +1157,15 @@ input:disabled + .slider { opacity: 0.5; cursor: not-allowed; }
     background: rgba(218, 200, 179, 0.7);
 }
 .mobile-profile-cover {
-    height: 220px;
+    height: 250px;
+    min-height: 220px;
     background:
-        linear-gradient(180deg, rgba(0,0,0,0.05) 0%, rgba(0,0,0,0.7) 100%),
+        linear-gradient(180deg, rgba(0,0,0,0.05) 0%, rgba(0,0,0,0.65) 100%),
         linear-gradient(135deg, rgba(59,130,246,0.45) 0%, rgba(29,78,216,0.2) 50%, rgba(20,20,20,0.95) 100%);
     border-radius: 24px 24px 0 0;
     background-size: cover;
     background-position: center;
+    background-repeat: no-repeat;
     image-rendering: -webkit-optimize-contrast;
 }
 .mobile-profile-identity {
@@ -1172,7 +1174,7 @@ input:disabled + .slider { opacity: 0.5; cursor: not-allowed; }
     justify-content: space-between;
     gap: 1rem;
     padding: 0 1.5rem;
-    margin-top: -55px;
+    margin-top: -65px;
     position: relative;
     z-index: 2;
     pointer-events: none;
@@ -1187,21 +1189,26 @@ input:disabled + .slider { opacity: 0.5; cursor: not-allowed; }
     min-width: 0;
 }
 .mobile-profile-avatar {
-    width: 110px;
-    height: 110px;
+    width: 130px;
+    height: 130px;
     border-radius: 50%;
     background: linear-gradient(135deg, var(--color-blue), #1d4ed8);
     border: 4px solid var(--bg-dark);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 2.2rem;
+    font-size: 2.6rem;
     font-weight: 800;
     color: #fff;
     flex-shrink: 0;
     overflow: hidden;
     aspect-ratio: 1/1;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.28);
+    cursor: pointer;
+    transition: transform 0.2s ease;
+}
+.mobile-profile-avatar:hover {
+    transform: scale(1.03);
 }
 .mobile-profile-meta h2 {
     font-size: 1.35rem;
