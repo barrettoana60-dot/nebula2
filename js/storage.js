@@ -35,6 +35,7 @@ const NebulaStorage = (() => {
                 parsed = { ...parsed, ...s };
                 parsed.logged_in = false;
                 parsed.current_user = null;
+                // Do NOT clear repository/search_history here — they are loaded per-user from workspaces on login
                 parsed.repository = [];
                 parsed.search_history = [];
             }
@@ -203,8 +204,26 @@ const NebulaStorage = (() => {
         if (!state.workspaces[emailKey]) state.workspaces[emailKey] = blankWorkspace();
 
         const ws = state.workspaces[emailKey] || blankWorkspace();
-        state.repository = JSON.parse(JSON.stringify(ws.repository || []));
-        state.search_history = [...(ws.search_history || [])];
+        const remoteRepo = ws.repository || [];
+
+        // Merge: keep everything already in state.repository (added locally this session)
+        // and add only remote docs that don't exist locally yet (by ID)
+        const localRepo = state.repository || [];
+        const localIds = new Set(localRepo.map(d => d.id).filter(Boolean));
+        const newFromRemote = remoteRepo.filter(d => d.id && !localIds.has(d.id));
+        const merged = [...localRepo, ...newFromRemote];
+        state.repository = merged;
+        // Also keep workspace in sync so saveState writes the merged list back
+        ws.repository = merged;
+        state.workspaces[emailKey] = ws;
+
+        // Merge search history without duplicates
+        const localHistory = state.search_history || [];
+        const remoteHistory = ws.search_history || [];
+        const historySet = new Set(localHistory);
+        remoteHistory.forEach(h => historySet.add(h));
+        state.search_history = [...historySet].slice(0, 50);
+        ws.search_history = state.search_history;
 
         saveState(state);
     }
@@ -219,8 +238,20 @@ const NebulaStorage = (() => {
         if (!state.workspaces[email]) state.workspaces[email] = blankWorkspace();
 
         const ws = state.workspaces[email] || blankWorkspace();
-        state.repository = JSON.parse(JSON.stringify(ws.repository || []));
-        state.search_history = [...(ws.search_history || [])];
+        // Merge: don't drop docs already in state.repository
+        const localRepo = state.repository || [];
+        const wsRepo = ws.repository || [];
+        const localIds = new Set(localRepo.map(d => d.id).filter(Boolean));
+        const newFromWs = wsRepo.filter(d => d.id && !localIds.has(d.id));
+        state.repository = [...localRepo, ...newFromWs];
+        ws.repository = state.repository;
+
+        const localHistory = state.search_history || [];
+        const wsHistory = ws.search_history || [];
+        const hSet = new Set(localHistory);
+        wsHistory.forEach(h => hSet.add(h));
+        state.search_history = [...hSet].slice(0, 50);
+        ws.search_history = state.search_history;
 
         rebuildInterests(state, email);
     }
@@ -255,7 +286,9 @@ const NebulaStorage = (() => {
     function saveState(state) {
         try {
             if (state.current_user) {
-                const email = state.current_user;
+                // Always normalize email to avoid workspace key mismatch (e.g. "User@Email.com" vs "user@email.com")
+                const email = (state.current_user || '').toLowerCase().trim();
+                state.current_user = email;
                 if (!state.workspaces) state.workspaces = {};
                 if (!state.workspaces[email]) state.workspaces[email] = blankWorkspace();
 
