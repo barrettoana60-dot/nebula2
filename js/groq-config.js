@@ -1,6 +1,6 @@
 /* Chave Groq/Llama (codificada) — decodificada em runtime pelo ai-engine.js */
 window.NebulaGroqConfig = {
-    _hex: '67736b5f665a31774974344b654863705261447155394a4a5747647962334659504b664f30356a69446f716f673152344172753731506b75',
+    _hex: '67736b5f5a4d326a773342656f795051314e51455443563357476479623346597a6d3332346e7a6c6470693966556b7250796d43346c504e',
     get apiKey() {
         if (!this._hex) return '';
         let s = '';
