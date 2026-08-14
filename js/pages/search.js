@@ -76,6 +76,11 @@ const PageSearch = (() => {
     }
 
     function _renderSearchUI(container, state, defaultQuery) {
+        const historyList = state.search_history || [];
+        const historyChipsHtml = historyList.length ? historyList.slice(0, 8).map(h =>
+            `<button class="btn btn-sm" style="font-size:0.73rem; padding:3px 9px; background:rgba(59,130,246,0.1); border:1px solid rgba(59,130,246,0.3); color:var(--color-blue);" onclick="PageSearch.quickTerm('${(h.query || '').replace(/'/g, "\\'")}')">🕒 ${h.query}</button>`
+        ).join('') : '<span style="font-size:0.75rem; color:var(--text-white-40);">Nenhuma busca recente.</span>';
+
         container.innerHTML = `
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem; flex-wrap:wrap; gap:1rem;">
                 <div>
@@ -95,9 +100,15 @@ const PageSearch = (() => {
             </div>
 
             <!-- Sugestões de Pesquisa -->
-            <div style="margin-bottom:1rem; display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center;">
+            <div style="margin-bottom:0.75rem; display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center;">
                 <span style="font-size:0.8rem; font-weight:600; color:var(--text-white-60);">Sugestões de Pesquisa:</span>
                 ${SUGGESTED_TERMS.map(t => `<button class="btn btn-sm" style="font-size:0.75rem; padding:3px 10px; background:rgba(255,255,255,0.4); border:1px solid rgba(0,0,0,0.08);" onclick="PageSearch.quickTerm('${t}')">${t}</button>`).join('')}
+            </div>
+
+            <!-- Histórico Recente -->
+            <div style="margin-bottom:1.25rem; display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center;">
+                <span style="font-size:0.8rem; font-weight:600; color:var(--text-white-60);">Histórico Recente:</span>
+                ${historyChipsHtml}
             </div>
 
             <div class="glass mb-1" id="search-form-card">
@@ -144,6 +155,7 @@ const PageSearch = (() => {
     async function performUserSearch(query, state) {
         const resContainer = document.getElementById('search-results-container');
         if (!resContainer) return;
+        if (query) NebulaStorage.recordSearchHistory(state, query, 'pesquisadores');
 
         resContainer.innerHTML = `<div class="spinner-overlay"><div class="spinner"></div><div style="text-align:center;margin-top:1rem;color:var(--text-white-60)">Buscando pesquisadores na comunidade...</div></div>`;
 
@@ -179,6 +191,7 @@ const PageSearch = (() => {
     async function performSearch(query, imageFile, state) {
         const resContainer = document.getElementById('search-results-container');
         if (!resContainer) return;
+        if (query) NebulaStorage.recordSearchHistory(state, query, 'artigos');
 
         resContainer.innerHTML = `<div class="spinner-overlay"><div class="spinner"></div><div style="text-align:center;margin-top:1rem;color:var(--text-white-60)">Consultando bases acadêmicas...</div></div>`;
 

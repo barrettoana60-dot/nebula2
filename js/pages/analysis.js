@@ -12,7 +12,7 @@ const PageAnalysis = (() => {
             <div class="tabs-bar" style="max-width: 720px; margin-bottom: 2rem;">
                 <button class="tab-btn ${currentTab === 'overview' ? 'active' : ''}" id="tab-overview">Visão Geral do Acervo</button>
                 <button class="tab-btn ${currentTab === 'autoral' ? 'active' : ''}" id="tab-autoral">Minha Produção (${userName.split(' ')[0]})</button>
-                <button class="tab-btn ${currentTab === 'editor' ? 'active' : ''}" id="tab-editor">Doc (Editor)</button>
+                <button class="tab-btn ${currentTab === 'editor' ? 'active' : ''}" id="tab-editor">Editor de Texto</button>
                 <button class="tab-btn ${currentTab === 'mindmap' ? 'active' : ''}" id="tab-mindmap">Mapa Mental</button>
             </div>
             

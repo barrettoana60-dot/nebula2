@@ -1041,25 +1041,19 @@ const PageRepository = (() => {
                 const indicator = document.getElementById('reader-page-indicator');
                 if (!sheet) return;
 
-                const pageData = doc.pages[currentPageIndex] || doc.pages[0] || { text: '', number: 1 };
-                
-                // Render text with ABNT formatting and highlights
-                sheet.innerHTML = formatArticleABNT(pageData.text, doc, pageData.number, doc.highlights, currentPageIndex === 0);
+                let allPagesHtml = '';
+                (doc.pages || []).forEach((pData, idx) => {
+                    const pText = pData.text || '';
+                    const pNum = pData.number || (idx + 1);
+                    allPagesHtml += `
+                        <div id="page-block-${pNum}" class="abnt-page-block" style="margin-bottom:2.5rem; padding-bottom:1.5rem; border-bottom:1px dashed rgba(0,0,0,0.15);">
+                            <div style="font-size:0.75rem; color:#64748b; font-family:sans-serif; margin-bottom:0.75rem; font-weight:bold; text-align:right;">Página ${pNum} de ${doc.pages.length}</div>
+                            ${formatArticleABNT(pText, doc, pNum, doc.highlights, idx === 0)}
+                        </div>`;
+                });
 
-                indicator.textContent = `Página ${pageData.number} de ${doc.pages.length}`;
-                
-                document.getElementById('reader-prev-btn').disabled = currentPageIndex <= 0;
-                document.getElementById('reader-next-btn').disabled = currentPageIndex >= doc.pages.length - 1;
-
-                // Adjust style for disabled buttons
-                document.getElementById('reader-prev-btn').style.opacity = currentPageIndex <= 0 ? '0.4' : '1';
-                document.getElementById('reader-prev-btn').style.cursor = currentPageIndex <= 0 ? 'not-allowed' : 'pointer';
-                document.getElementById('reader-next-btn').style.opacity = currentPageIndex >= doc.pages.length - 1 ? '0.4' : '1';
-                document.getElementById('reader-next-btn').style.cursor = currentPageIndex >= doc.pages.length - 1 ? 'not-allowed' : 'pointer';
-
-                // Scroll reader sheet to top
-                document.getElementById('reader-scroll-zone').scrollTop = 0;
-
+                sheet.innerHTML = allPagesHtml;
+                if (indicator) indicator.textContent = `${doc.pages.length} página(s) · Rolamento Contínuo`;
                 loadSidebar();
             };
 
@@ -1170,10 +1164,9 @@ const PageRepository = (() => {
 
             // Global modal functions
             window._readerGoToPage = (num) => {
-                const idx = doc.pages.findIndex(p => p.number === num);
-                if (idx !== -1) {
-                    currentPageIndex = idx;
-                    loadPage();
+                const el = document.getElementById(`page-block-${num}`);
+                if (el) {
+                    el.scrollIntoView({ behavior: 'smooth' });
                 }
             };
 

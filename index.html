@@ -18,11 +18,6 @@
 </head>
 <body>
     <div id="app" class="app-root">
-        <!-- Floating orbs -->
-        <div class="orb orb-a"></div>
-        <div class="orb orb-b"></div>
-        <div class="orb orb-c"></div>
-
         <!-- Navbar (hidden when not logged in) -->
         <nav id="navbar" class="nav-shell" style="display:none">
             <div class="nav-brand">Nebula Research</div>
@@ -36,6 +31,9 @@
                 </div>
             </div>
             <div class="nav-right desktop-nav-right" style="display:flex; align-items:center; gap: 1rem;">
+                <button type="button" onclick="location.reload()" style="background:transparent;border:none;cursor:pointer;padding:4px 6px;color:var(--text-white-80);display:flex;align-items:center;justify-content:center;" title="Atualizar Página">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+                </button>
                 <div id="navBellWrapper" class="desktop-bell-wrap" style="position:relative;">
                     <button onclick="NebulaApp.toggleBellDropdown()" style="background:transparent;border:none;cursor:pointer;position:relative;padding:4px 6px;" title="Notificações">
                         <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--text-white-80)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -59,6 +57,9 @@
         <header id="mobileHeader" class="mobile-header" style="display:none">
             <div class="mobile-header-title" id="mobileHeaderTitle">Nebula</div>
             <div class="mobile-header-actions">
+                <button type="button" class="mobile-hdr-btn" onclick="location.reload()" title="Atualizar Página">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+                </button>
                 <button type="button" class="mobile-hdr-btn" onclick="NebulaApp.toggleMobileMoreSheet()" title="Mais opções">
                     <svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.5" fill="currentColor" stroke="none"/></svg>
                 </button>
@@ -97,28 +98,28 @@
         </div>
     </div>
 
-    <!-- Scripts (v98 cache bust) -->
+    <!-- Scripts (v100 cache bust) -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="js/supabase-client.js?v=98"></script>
-    <script src="js/groq-config.js?v=98"></script>
-    <script src="js/storage.js?v=98"></script>
-    <script src="js/text-engine.js?v=98"></script>
-    <script src="js/ai-engine.js?v=98"></script>
-    <script src="js/document-engine.js?v=98"></script>
-    <script src="js/search-engine.js?v=98"></script>
-    <script src="js/network-engine.js?v=98"></script>
-    <script src="js/analytics.js?v=98"></script>
-    <script src="js/pages/backroom.js?v=98"></script>
-    <script src="js/pages/dashboard.js?v=98"></script>
-    <script src="js/pages/search.js?v=98"></script>
-    <script src="js/pages/repository.js?v=98"></script>
-    <script src="js/pages/analysis.js?v=98"></script>
-    <script src="js/pages/editor.js?v=98"></script>
-    <script src="js/pages/connections.js?v=98"></script>
-    <script src="js/pages/chat.js?v=98"></script>
-    <script src="js/pages/profile.js?v=98"></script>
-    <script src="js/auth.js?v=98"></script>
-    <script src="js/tutorial.js?v=98"></script>
-    <script src="js/app.js?v=98"></script>
+    <script src="js/supabase-client.js?v=100"></script>
+    <script src="js/groq-config.js?v=100"></script>
+    <script src="js/storage.js?v=100"></script>
+    <script src="js/text-engine.js?v=100"></script>
+    <script src="js/ai-engine.js?v=100"></script>
+    <script src="js/document-engine.js?v=100"></script>
+    <script src="js/search-engine.js?v=100"></script>
+    <script src="js/network-engine.js?v=100"></script>
+    <script src="js/analytics.js?v=100"></script>
+    <script src="js/pages/backroom.js?v=100"></script>
+    <script src="js/pages/dashboard.js?v=100"></script>
+    <script src="js/pages/search.js?v=100"></script>
+    <script src="js/pages/repository.js?v=100"></script>
+    <script src="js/pages/analysis.js?v=100"></script>
+    <script src="js/pages/editor.js?v=100"></script>
+    <script src="js/pages/connections.js?v=100"></script>
+    <script src="js/pages/chat.js?v=100"></script>
+    <script src="js/pages/profile.js?v=100"></script>
+    <script src="js/auth.js?v=100"></script>
+    <script src="js/tutorial.js?v=100"></script>
+    <script src="js/app.js?v=100"></script>
 </body>
 </html>

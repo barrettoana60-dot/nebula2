@@ -27,15 +27,7 @@ const NetworkEngine = (() => {
             nodes.push({ id: `ext_${i}`, label: (art.title || '').slice(0, 40), type: 'external', topic: art.topic || '', text: `${art.title || ''} ${art.abstract || ''}`, year: art.year || '', author: art.authors || '', url: art.url || '' });
         });
 
-        const globalTopics = {};
-        docs.concat(externalArticles || []).forEach(item => {
-            if (item.topic) globalTopics[item.topic] = (globalTopics[item.topic] || 0) + 1;
-        });
-        Object.entries(globalTopics).forEach(([topic, count], i) => {
-            if (count >= 2) {
-                nodes.push({ id: `global_research_${i}`, label: `Pesquisa em ${topic}`, type: 'global_research', topic: topic, text: topic, year: '', author: 'Cluster Global' });
-            }
-        });
+        // global_research nodes removed — replaced by topic nodes in chain view
 
         const threshold = 0.08;
         for (let i = 0; i < nodes.length; i++) {
@@ -399,15 +391,14 @@ const NetworkEngine = (() => {
             user: '#3b82f6',
             local: '#f97316',
             external: '#06b6d4',
-            global_research: '#10b981',
             researcher: '#a78bfa',
             topic: '#fbbf24',
         };
         const typeLabels = {
             user: 'Minha Pesquisa', local: 'Seus Documentos', external: 'Artigos Externos',
-            global_research: 'Pesquisas Globais', researcher: 'Pesquisadores', topic: 'Temas Compartilhados'
+            researcher: 'Pesquisadores', topic: 'Temas Compartilhados'
         };
-        const typeSizes = { user: 22, local: 11, external: 9, global_research: 16, researcher: 14, topic: 10 };
+        const typeSizes = { user: 22, local: 11, external: 9, researcher: 14, topic: 10 };
 
         const traces = [];
 

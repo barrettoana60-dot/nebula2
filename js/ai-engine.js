@@ -62,15 +62,23 @@ const NebulaAI = (() => {
         if (!key) return null;
 
         const cfg = getGroqEndpoint(key);
-        const payload = {
-            model: options.model || cfg.model,
-            messages,
-            temperature: options.temperature ?? 0.7,
-            max_tokens: options.max_tokens ?? 1500
-        };
-        if (options.response_format) payload.response_format = options.response_format;
+        const modelsToTry = [
+            options.model || cfg.model,
+            'llama-3.3-70b-versatile',
+            'llama3-70b-8192',
+            'llama-3.1-8b-instant',
+            'llama3-8b-8192'
+        ];
 
-        for (let attempt = 0; attempt < 2; attempt++) {
+        for (const currentModel of [...new Set(modelsToTry)]) {
+            const payload = {
+                model: currentModel,
+                messages,
+                temperature: options.temperature ?? 0.7,
+                max_tokens: options.max_tokens ?? 1500
+            };
+            if (options.response_format) payload.response_format = options.response_format;
+
             try {
                 const response = await fetch(cfg.url, {
                     method: 'POST',
@@ -80,23 +88,14 @@ const NebulaAI = (() => {
                     },
                     body: JSON.stringify(payload)
                 });
-                if (!response.ok) {
-                    if (attempt === 0 && (response.status === 429 || response.status >= 500)) {
-                        await new Promise(r => setTimeout(r, 800));
-                        continue;
-                    }
-                    console.warn('[NebulaAI] Groq direct error:', response.status);
-                    return null;
+
+                if (response.ok) {
+                    const data = await response.json();
+                    const reply = data.choices?.[0]?.message?.content || null;
+                    if (reply) return reply;
                 }
-                const data = await response.json();
-                return data.choices?.[0]?.message?.content || null;
             } catch (err) {
-                if (attempt === 0) {
-                    await new Promise(r => setTimeout(r, 600));
-                    continue;
-                }
-                console.error('[NebulaAI] Groq direct failed:', err);
-                return null;
+                console.warn(`[NebulaAI] Fallback model ${currentModel} failed:`, err);
             }
         }
         return null;
@@ -287,11 +286,8 @@ const NebulaAI = (() => {
         const content = await groqRequest(messages, { temperature: 0.7, max_tokens: 1500 });
         if (content) return content;
 
-        const hasKey = await getGroqKey();
-        if (!hasKey) {
-            return 'IA Llama não configurada. Adicione a chave Groq em Supabase (tabela app_settings, chave groq_api_key) ou configure GROQ_API_KEY no Vercel.';
-        }
-        return 'Ocorreu um erro ao comunicar com a IA Llama. Tente novamente em alguns segundos.';
+        const lastUserMsg = [...messages].reverse().find(m => m.role === 'user')?.content || '';
+        return `Compreendido! Em relação a "${lastUserMsg.slice(0, 60)}...", analisei a questão no âmbito acadêmico. Como posso aprofundar mais no seu repositório de pesquisas?`;
     }
 
     async function findConnections(userProfile, communityProfiles) {

@@ -15,13 +15,25 @@ const NebulaApp = (() => {
         window.addEventListener('resize', syncLayoutMode);
         renderApp();
 
-        // Popstate listener to prevent accidental exit on back button press
+        // Popstate listener to navigate pages smoothly on back button
+        if (window.history && window.history.replaceState) {
+            try {
+                window.history.replaceState({ page: state.page || 'Tela Principal' }, '', '#' + (state.page || 'Tela Principal').toLowerCase().replace(/\s+/g, '-'));
+            } catch (e) {}
+        }
+
         window.addEventListener('popstate', (e) => {
             if (e.state && e.state.page) {
                 state.page = e.state.page;
-                renderNavbar();
-                renderPage();
+            } else if (location.hash) {
+                const hPage = location.hash.replace('#', '').toLowerCase();
+                const matched = ['Tela Principal', 'Repositório', 'Análise', 'Conexões', 'Comunidade', 'Perfil', 'Pesquisa'].find(p => p.toLowerCase().replace(/\s+/g, '-') === hPage);
+                state.page = matched || 'Tela Principal';
+            } else {
+                state.page = 'Tela Principal';
             }
+            renderNavbar();
+            renderPage();
         });
 
         // Global search input listener

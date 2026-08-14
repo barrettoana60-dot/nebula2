@@ -7,10 +7,13 @@ const PageEditor = (() => {
         container.innerHTML = `
             <div class="glass" style="min-height: 600px; display: flex; flex-direction: column;">
                 <div class="section-title" style="display:flex; justify-content:space-between; align-items:center;">
-                    Doc
-                    <button class="btn btn-sm" id="btn-export-doc">Exportar PDF</button>
+                    <span>Editor de Texto</span>
+                    <div style="display:flex; gap:0.5rem;">
+                        <button class="btn btn-sm btn-primary" id="btn-new-doc" style="gap:0.3rem;">+ Novo Documento</button>
+                        <button class="btn btn-sm" id="btn-export-doc">Exportar PDF</button>
+                    </div>
                 </div>
-                <p class="small-muted mb-1">Escreva seus artigos e notas com salvamento automático e ferramentas avançadas.</p>
+                <p class="small-muted mb-1">Escreva seus artigos e notas acadêmicas com salvamento automático e formatação completa.</p>
                 
                 <div id="editor-toolbar" style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-bottom:1rem; padding:0.8rem; background:rgba(0,0,0,0.3); border-radius:16px; border:1px solid var(--glass-border); align-items:center; box-shadow: inset 0 2px 10px rgba(0,0,0,0.2);">
                     
@@ -170,6 +173,15 @@ const PageEditor = (() => {
                 localStorage.setItem(`nebula_editor_${state.current_user}`, area.innerHTML);
                 document.getElementById('editor-status').innerText = 'Salvo localmente.';
             }, 1000);
+        });
+
+        document.getElementById('btn-new-doc')?.addEventListener('click', () => {
+            if (confirm('Criar um novo documento em branco? O rascunho anterior será limpo.')) {
+                area.innerHTML = '<h2>Título do Novo Documento</h2><p>Comece a escrever seu trabalho acadêmico aqui...</p>';
+                localStorage.setItem(`nebula_editor_${state.current_user}`, area.innerHTML);
+                document.getElementById('editor-status').innerText = 'Novo documento criado.';
+                area.focus();
+            }
         });
 
         // --- PDF Export e Limpar ---

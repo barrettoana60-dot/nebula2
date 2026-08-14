@@ -142,18 +142,22 @@ const PageChat = (() => {
         msgObj.sender_email = senderEmail;
         msgObj.recipient_email = recipientEmail;
 
-        if (isAi) {
-            const localStore = getStoredMessages();
-            saveStoredMessages(NebulaStorage.mergeMessagesUnique(localStore, [msgObj]));
-            return;
-        }
+        const localStore = getStoredMessages();
+        saveStoredMessages(NebulaStorage.mergeMessagesUnique(localStore, [msgObj]));
+
+        if (isAi) return;
 
         msgObj._pending = true;
         _optimisticMsgs = NebulaStorage.mergeMessagesUnique(_optimisticMsgs, [msgObj]);
 
-        const ok = await NebulaStorage.saveMessageToSupabase(msgObj);
-        _optimisticMsgs = _optimisticMsgs.filter(m => m.id !== msgObj.id);
-        if (ok) msgObj.delivered = true;
+        try {
+            const ok = await NebulaStorage.saveMessageToSupabase(msgObj);
+            if (ok) msgObj.delivered = true;
+        } catch (e) {
+            console.warn('[Chat] Supabase send fallback to local:', e);
+        } finally {
+            _optimisticMsgs = _optimisticMsgs.filter(m => m.id !== msgObj.id);
+        }
     }
 
     async function getRoomMessages(roomId, myEmail, peerEmail) {
@@ -206,12 +210,12 @@ const PageChat = (() => {
 
     function renderStatusDots(status) {
         if (status === 'read') {
-            return `<span class="msg-status msg-status-read" title="Visualizado"><span class="msg-dot on"></span><span class="msg-dot on"></span></span>`;
+            return `<span class="msg-status msg-status-read" title="Visualizado" style="color:#3b82f6; font-weight:bold; letter-spacing:-2px; display:inline-flex; align-items:center;">✓✓</span>`;
         }
         if (status === 'delivered') {
-            return `<span class="msg-status msg-status-delivered" title="Enviado"><span class="msg-dot"></span><span class="msg-dot"></span></span>`;
+            return `<span class="msg-status msg-status-delivered" title="Entregue" style="color:var(--text-white-60); font-weight:bold; letter-spacing:-2px; display:inline-flex; align-items:center;">✓✓</span>`;
         }
-        return `<span class="msg-status msg-status-sent" title="Enviando"><span class="msg-dot"></span></span>`;
+        return `<span class="msg-status msg-status-sent" title="Enviado" style="color:var(--text-white-60); font-weight:bold; display:inline-flex; align-items:center;">✓</span>`;
     }
 
     function getStatusLabel(room) {

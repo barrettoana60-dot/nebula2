@@ -1159,11 +1159,13 @@ input:disabled + .slider { opacity: 0.5; cursor: not-allowed; }
     box-shadow: 0 4px 20px rgba(0,0,0,0.03);
 }
 .mobile-profile-cover {
-    height: 160px;
+    height: 200px;
     background:
-        linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.55) 100%),
-        linear-gradient(135deg, rgba(59,130,246,0.3) 0%, rgba(20,20,20,0.9) 60%);
+        linear-gradient(180deg, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.65) 100%),
+        linear-gradient(135deg, rgba(59,130,246,0.4) 0%, rgba(20,20,20,0.92) 60%);
     border-radius: 0;
+    background-size: cover;
+    background-position: center;
 }
 .mobile-profile-identity {
     display: flex;
@@ -1171,7 +1173,7 @@ input:disabled + .slider { opacity: 0.5; cursor: not-allowed; }
     justify-content: space-between;
     gap: 0.75rem;
     padding: 0 1.25rem;
-    margin-top: -44px;
+    margin-top: -50px;
     position: relative;
     z-index: 2;
     pointer-events: none;
@@ -1182,12 +1184,12 @@ input:disabled + .slider { opacity: 0.5; cursor: not-allowed; }
 .mobile-profile-left {
     display: flex;
     align-items: flex-end;
-    gap: 0.85rem;
+    gap: 1rem;
     min-width: 0;
 }
 .mobile-profile-avatar {
-    width: 76px;
-    height: 76px;
+    width: 96px;
+    height: 96px;
     border-radius: 22px;
     background: linear-gradient(135deg, var(--copper-1), var(--copper-2));
     border: 3px solid var(--bg-dark);

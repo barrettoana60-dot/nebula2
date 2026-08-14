@@ -1036,6 +1036,28 @@ const NebulaStorage = (() => {
         return peers;
     }
 
+    function recordSearchHistory(state, query, category = 'artigos') {
+        if (!query || query.trim().length < 2) return;
+        const q = query.trim();
+        const userEmail = (state.current_user || '').toLowerCase().trim();
+        if (!state.search_history) state.search_history = [];
+
+        state.search_history = state.search_history.filter(h => (h.query || '').toLowerCase() !== q.toLowerCase());
+        state.search_history.unshift({
+            query: q,
+            category: category,
+            timestamp: Date.now(),
+            dateStr: new Date().toLocaleDateString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+        });
+
+        state.search_history = state.search_history.slice(0, 30);
+
+        if (userEmail && state.workspaces && state.workspaces[userEmail]) {
+            state.workspaces[userEmail].search_history = [...state.search_history];
+        }
+        saveState(state);
+    }
+
     return {
         setEncryptionKey,
         encryptText: async (t) => t,
@@ -1082,5 +1104,6 @@ const NebulaStorage = (() => {
         fetchCommunityProfilesDirect,
         fetchProfilesFromAPI,
         saveProfileViaAPI,
+        recordSearchHistory,
     };
 })();
